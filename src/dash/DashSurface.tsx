@@ -1,8 +1,10 @@
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { DashSurfaceView } from '../../modules/moto-link';
+import { tapDashPage } from '../app-state/controller';
 import { useAppState } from '../app-state/store';
 import { colors } from '../ui/kit';
+import { PAGES, PAGE_TITLES } from './controller';
 import { DashScreen } from './DashScreen';
 
 /** Size used until a dash has stated its own. Matches the 5" CFMOTO panels. */
@@ -20,6 +22,7 @@ const DEFAULT_SIZE = { width: 800, height: 384 };
 export function DashSurface() {
   const capture = useAppState((s) => s.link.capture);
   const mirroring = useAppState((s) => s.mirroring);
+  const page = useAppState((s) => s.dash.page);
   const { width: screenWidth } = useWindowDimensions();
   const size = capture ? { width: capture.width, height: capture.height } : DEFAULT_SIZE;
   const scale = screenWidth / size.width;
@@ -30,8 +33,27 @@ export function DashSurface() {
         <Text style={styles.captionText} accessibilityRole="header">
           {mirroring ? 'Dash is showing your phone screen' : 'Dash preview'}
         </Text>
-        {mirroring ? null : <Text style={styles.captionHint}>Tap to try it</Text>}
       </View>
+      {/* The tabs inside the picture are sized for the dash and come out tiny on
+          the phone, so the phone gets its own full-size page buttons. */}
+      {mirroring ? null : (
+        <View style={styles.pages} accessibilityRole="tablist">
+          {PAGES.map((item) => {
+            const selected = item === page;
+            return (
+              <Pressable
+                key={item}
+                accessibilityRole="tab"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Dash page: ${PAGE_TITLES[item]}`}
+                onPress={() => tapDashPage(item)}
+                style={[styles.page, selected && styles.pageSelected]}>
+                <Text style={[styles.pageLabel, selected && styles.pageLabelSelected]}>{PAGE_TITLES[item]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       <View
         style={{
           width: screenWidth,
@@ -63,5 +85,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   captionText: { color: colors.dim, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
-  captionHint: { color: colors.dim, fontSize: 13 },
+  pages: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
+  page: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  pageLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  pageLabelSelected: { color: colors.onAccent, fontWeight: '700' },
 });
