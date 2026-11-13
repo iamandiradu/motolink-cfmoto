@@ -1,6 +1,6 @@
 # MotoLink
 
-iPhone app for the CFMOTO 450 MT dash (MotoPlay). It streams its own picture to the dash over the dash's Wi-Fi: ride data, a map and a trip computer, driven by the handlebar buttons.
+iPhone app for the CFMOTO 450 MT dash (MotoPlay). It streams a picture to the dash over the dash's Wi-Fi: either the phone screen (Waze, Google Maps, Spotify), or its own ride data, map and trip computer driven by the handlebar buttons.
 
 This is not Apple CarPlay. The dash speaks Carbit EasyConn, not CarPlay, and iOS only projects CarPlay to Apple-certified receivers. See [docs/PLAN.md](docs/PLAN.md) for what was learned from the reference projects, the architecture and the open risks.
 
@@ -15,6 +15,22 @@ This is not Apple CarPlay. The dash speaks Carbit EasyConn, not CarPlay, and iOS
 5. Keep the app open on screen while riding.
 
 Next time: ignition on, open the app. It connects by itself.
+
+## Waze, Google Maps or Spotify on the dash
+
+The app can mirror the whole phone screen to the dash, so any app shows up there.
+
+1. Connect to the bike as above.
+2. On the **Link** tab tap **Start mirroring**, choose MotoLink, then **Start Broadcast**.
+3. Open Waze and turn the phone sideways. A sideways screen fills the dash; an upright one is shown between black bars.
+
+Limits, all from iOS:
+
+- The phone screen has to stay on. A locked phone shows nothing. Waze keeps the screen awake while it navigates.
+- The handlebar buttons cannot steer another app. Set the route before riding. Media keys still reach Spotify directly.
+- In the Buttons tab use **Off** or **Up / down only**. **All buttons** pauses other music.
+
+To stop, tap **Stop mirroring**, or the red indicator at the top of the phone screen.
 
 ## Buttons
 
@@ -65,6 +81,8 @@ To get a signed `.ipa` from CI, add three repository secrets:
 | `IOS_CERTIFICATE_P12_BASE64` | base64 of your signing certificate `.p12` |
 | `IOS_CERTIFICATE_PASSWORD` | password of that `.p12` |
 | `IOS_PROVISIONING_PROFILE_BASE64` | base64 of a provisioning profile for `com.iamandiradu.motolink` |
+
+The signing step covers the app only, not the screen-mirroring extension inside it, so a CI-signed build cannot mirror yet. Building from Xcode signs both.
 
 A profile from a paid Apple Developer account can include the Hotspot Configuration capability, which lets the app join the dash Wi-Fi by itself. Without it, join the dash Wi-Fi once in iOS Settings; iOS remembers the network.
 

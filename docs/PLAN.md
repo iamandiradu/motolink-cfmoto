@@ -43,6 +43,11 @@ Native module (Swift, modules/moto-link)
   FrameCapturer   snapshots the React Native dash view into the encoder
   RsaIdentity     throwaway RSA-1024 key for the handshake
   ButtonBridge    volume observer, media remote commands, silent audio
+  MirrorReceiver  loopback socket that takes encoded frames from the broadcast extension
+
+Broadcast extension (Swift, targets/broadcast)
+  SampleHandler   receives phone screen frames from iOS
+  MirrorSender    fits them to the dash size, encodes, sends to the app
 ```
 
 Protocol decisions live in TypeScript so they can be tested without a phone. The native side is transport only. The single exception is the video pull on port 10920: it runs at about 24 requests a second and is answered natively.
@@ -56,6 +61,7 @@ Protocol decisions live in TypeScript so they can be tested without a phone. The
 | 2 | Buttons: capture, gestures, default layout, remapping | Written. Logic unit tested. Needs the bike to learn what the 450 MT sends. |
 | 3 | Interface: dash pages (ride, map, trip, menu) and phone screens | Written. Not yet seen on a device. |
 | 4 | IPA build on every merge to master | Workflow in `.github/workflows/build-ipa.yml` |
+| 4b | Screen mirroring: broadcast extension captures the phone screen, scales and encodes it; the app relays it to the dash | Written. Pipeline run end to end on macOS with synthetic frames. Not yet run on a phone or against a dash. |
 | 5 | First ride: capture the 450 MT's details, fix what the dash rejects | Next. Needs the bike. |
 | 6 | Turn-by-turn navigation on the map page | Later |
 | 7 | OBD-II Bluetooth adapter as a metrics source (rpm, coolant, battery) | Later. Needs an adapter on the diagnostic plug. |

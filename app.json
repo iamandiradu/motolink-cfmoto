@@ -36,7 +36,8 @@
         {
           "locationWhenInUsePermission": "MotoLink uses your location for speed, heading, trip distance and the map on the dash."
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ]
   }
 }

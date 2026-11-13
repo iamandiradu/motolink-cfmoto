@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import NetworkExtension
+import ReplayKit
 import UIKit
 
 /// Thin native transport for the dash link. Protocol decisions live in
@@ -17,23 +18,49 @@ public class MotoLinkModule: Module {
   private var encoder: VideoEncoder?
   private var identity: RsaIdentity?
   private var statsTimer: Timer?
+  /// Screen mirroring: the broadcast extension delivers ready-made frames.
+  private let mirror = MirrorReceiver()
+  private let mirrorLock = NSLock()
+  private var mirrorActive = false
+  private var isMirroring: Bool {
+    mirrorLock.lock()
+    defer { mirrorLock.unlock() }
+    return mirrorActive
+  }
   private var lastStats = FrameQueue.Stats()
 
   public func definition() -> ModuleDefinition {
     Name("MotoLink")
 
-    Events("onConnectionOpen", "onConnectionData", "onConnectionClose", "onVideoStats", "onButton", "onLog")
+    Events("onConnectionOpen", "onConnectionData", "onConnectionClose", "onVideoStats", "onButton", "onLog", "onMirrorState")
 
     OnCreate {
       self.frames.onNeedKeyframe = { [weak self] in
-        self?.encoder?.requestKeyframe()
+        guard let self else { return }
+        // Whoever produces the picture right now must restart it.
+        if self.isMirroring {
+          self.mirror.requestKeyframe()
+        } else {
+          self.encoder?.requestKeyframe()
+        }
       }
+      self.mirror.onFrame = { [weak self] data, isKeyframe in
+        self?.frames.push(data, isKeyframe: isKeyframe)
+      }
+      self.mirror.onConnected = { [weak self] in
+        self?.setMirroring(true)
+      }
+      self.mirror.onDisconnected = { [weak self] in
+        self?.setMirroring(false)
+      }
+      self.mirror.start()
     }
 
     OnDestroy {
       self.teardownVideo()
       self.server.stop()
       self.buttons.stop()
+      self.mirror.stop()
     }
 
     // MARK: Network
@@ -125,10 +152,20 @@ public class MotoLinkModule: Module {
         bitrate: config["bitrate"] ?? 1_500_000,
         keyframeIntervalSec: config["keyframeIntervalSec"] ?? 5
       )
+      self.mirror.setConfig(
+        MirrorWire.Config(
+          width: wanted.width,
+          height: wanted.height,
+          fps: wanted.fps,
+          bitrate: wanted.bitrate,
+          keyframeIntervalSec: wanted.keyframeIntervalSec
+        ))
       if self.encoder?.config == wanted { return }
       self.teardownVideo()
       let encoder = try VideoEncoder(config: wanted) { [weak self] data, isKeyframe in
-        self?.frames.push(data, isKeyframe: isKeyframe)
+        // While the phone screen is mirrored, the app's own picture stays out of the stream.
+        guard let self, !self.isMirroring else { return }
+        self.frames.push(data, isKeyframe: isKeyframe)
       }
       self.encoder = encoder
       self.frames.reset()
@@ -160,11 +197,43 @@ public class MotoLinkModule: Module {
       self.buttons.reannounce()
     }.runOnQueue(.main)
 
+    // MARK: Screen mirroring
+
+    Function("isMirroring") { () -> Bool in
+      self.isMirroring
+    }
+
+    /// Opens the iOS "Screen Broadcast" sheet with this app's extension preselected.
+    AsyncFunction("showBroadcastPicker") {
+      let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
+      picker.preferredExtension = (Bundle.main.bundleIdentifier ?? "") + ".broadcast"
+      picker.showsMicrophoneButton = false
+      // The picker is a button with no public "press" call; tapping its inner
+      // button is the established way to open the sheet from our own control.
+      for case let button as UIButton in picker.subviews {
+        button.sendActions(for: .touchUpInside)
+      }
+    }.runOnQueue(.main)
+
     View(MotoLinkView.self) {
       Prop("label") { (view: MotoLinkView, value: String) in
         view.accessibilityLabel = value
       }
     }
+  }
+
+  private func setMirroring(_ active: Bool) {
+    mirrorLock.lock()
+    let changed = mirrorActive != active
+    mirrorActive = active
+    mirrorLock.unlock()
+    guard changed else { return }
+    // Switching source mid-stream: the dash needs a fresh keyframe from the new one.
+    frames.reset()
+    DispatchQueue.main.async {
+      self.capturer.paused = active
+    }
+    sendEvent("onMirrorState", ["active": active])
   }
 
   private func teardownVideo() {

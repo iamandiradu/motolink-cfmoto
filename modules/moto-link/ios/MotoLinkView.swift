@@ -28,6 +28,8 @@ class MotoLinkView: ExpoView {
 /// the encoder.
 final class FrameCapturer {
   private var displayLink: CADisplayLink?
+  /// Set while the phone screen is mirrored instead of this view.
+  var paused = false
   private var encoder: VideoEncoder?
   private let frames: FrameQueue
   private var lastCapture: CFTimeInterval = 0
@@ -57,7 +59,7 @@ final class FrameCapturer {
   }
 
   @objc private func tick(_ link: CADisplayLink) {
-    guard let encoder, let view = MotoLinkView.current, view.window != nil else { return }
+    guard !paused, let encoder, let view = MotoLinkView.current, view.window != nil else { return }
     let interval = frames.isBeingPulled() ? activeInterval : idleInterval
     guard link.timestamp - lastCapture >= interval else { return }
     lastCapture = link.timestamp

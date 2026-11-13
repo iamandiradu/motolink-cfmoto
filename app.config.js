@@ -6,6 +6,10 @@
 //
 //   MOTOLINK_HOTSPOT=1 npx expo prebuild --platform ios --clean
 module.exports = ({ config }) => {
+  // Signing team for local device builds, e.g. APPLE_TEAM_ID=ABCDE12345.
+  if (process.env.APPLE_TEAM_ID) {
+    config = { ...config, ios: { ...config.ios, appleTeamId: process.env.APPLE_TEAM_ID } };
+  }
   if (process.env.MOTOLINK_HOTSPOT !== '1') return config;
   return {
     ...config,

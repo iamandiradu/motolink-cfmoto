@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { connect, disconnect } from '../../app-state/controller';
+import { connect, disconnect, toggleMirroring } from '../../app-state/controller';
 import { saveBike, useAppState } from '../../app-state/store';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
@@ -25,6 +25,7 @@ const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string
 export default function LinkScreen() {
   const bike = useAppState((s) => s.bike);
   const link = useAppState((s) => s.link);
+  const mirroring = useAppState((s) => s.mirroring);
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
 
@@ -87,6 +88,19 @@ export default function LinkScreen() {
         )}
       </Card>
 
+      <Card title="Show Waze on the dash">
+        <View style={styles.statusRow}>
+          <View style={[styles.dot, { backgroundColor: mirroring ? colors.ok : colors.dim }]} />
+          <Text style={styles.statusTitle}>{mirroring ? 'Mirroring the phone screen' : 'Showing ride data'}</Text>
+        </View>
+        <Body dim>
+          {mirroring
+            ? 'The dash shows whatever is on this phone. Open Waze and turn the phone sideways so the map fills the dash. Keep the screen on.'
+            : 'Mirroring sends the whole phone screen to the dash, so any app works: Waze, Google Maps, Spotify. Tap below, choose MotoLink, then Start Broadcast.'}
+        </Body>
+        <Button label={mirroring ? 'Stop mirroring' : 'Start mirroring'} kind={mirroring ? 'plain' : 'primary'} onPress={toggleMirroring} />
+      </Card>
+
       <Card title="Bike">
         <Row label="Wi-Fi" value={bike.ssid} />
         {link.dash?.name ? <Row label="Dash" value={link.dash.name} /> : null}
@@ -109,8 +123,9 @@ export default function LinkScreen() {
 
       <Card title="Before you ride">
         <Body dim>
-          Close the CFMOTO app: it uses the same connection and the dash will talk to it instead. Keep this app open
-          on screen while riding; iOS stops the picture when the app is in the background.
+          Close the CFMOTO app: it uses the same connection and the dash will talk to it instead. The ride data
+          picture needs this app on screen. Mirroring keeps working with another app in front, as long as the
+          phone screen stays on.
         </Body>
       </Card>
     </Screen>

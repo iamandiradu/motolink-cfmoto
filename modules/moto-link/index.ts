@@ -2,7 +2,8 @@ import { NativeModule, requireNativeModule, requireNativeView } from 'expo';
 import type { ComponentType, ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-export type ButtonCaptureMode = 'volume' | 'full';
+/** keepAlive captures nothing; it only keeps the app running behind another app. */
+export type ButtonCaptureMode = 'keepAlive' | 'volume' | 'full';
 
 export type NativeButtonEvent =
   | { type: 'volume'; delta: number }
@@ -15,6 +16,7 @@ type MotoLinkEvents = {
   onVideoStats: (event: { framesSent: number; framesDropped: number }) => void;
   onButton: (event: NativeButtonEvent) => void;
   onLog: (event: { message: string }) => void;
+  onMirrorState: (event: { active: boolean }) => void;
 };
 
 declare class MotoLinkNativeModule extends NativeModule<MotoLinkEvents> {
@@ -39,6 +41,8 @@ declare class MotoLinkNativeModule extends NativeModule<MotoLinkEvents> {
   startButtonCapture(mode: ButtonCaptureMode, pinVolume: boolean): Promise<void>;
   stopButtonCapture(): Promise<void>;
   reannounceButtons(): Promise<void>;
+  isMirroring(): boolean;
+  showBroadcastPicker(): Promise<void>;
 }
 
 export const MotoLink = requireNativeModule<MotoLinkNativeModule>('MotoLink');

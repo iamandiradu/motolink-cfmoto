@@ -17,6 +17,7 @@ let session: LinkSession | null = null;
 let previousLinkState: LinkState = 'idle';
 let buttonSubscription: { remove(): void } | null = null;
 let logSubscription: { remove(): void } | null = null;
+let mirrorSubscription: { remove(): void } | null = null;
 
 const trip = new TripComputer();
 const phoneSensors = new PhoneSensorSource();
@@ -50,8 +51,9 @@ function onButton(raw: NativeButtonEvent): void {
 export async function applyButtonMode(): Promise<void> {
   const { buttonMode, pinVolume } = getState().settings;
   try {
-    if (buttonMode === 'off') await MotoLink.stopButtonCapture();
-    else await MotoLink.startButtonCapture(buttonMode, pinVolume);
+    // Even with buttons off, the silent audio stays on: it is what keeps the
+    // dash link alive while another app (Waze) is on screen.
+    await MotoLink.startButtonCapture(buttonMode === 'off' ? 'keepAlive' : buttonMode, pinVolume);
   } catch (error) {
     appendLog(`button capture: ${String(error)}`);
   }
@@ -70,6 +72,11 @@ export async function startMetrics(): Promise<void> {
 
 export function calibrateLean(): void {
   phoneSensors.calibrate();
+}
+
+/** Opens the iOS sheet that starts or stops mirroring the phone screen. */
+export function toggleMirroring(): void {
+  void MotoLink.showBroadcastPicker().catch((error) => appendLog(`mirroring: ${String(error)}`));
 }
 
 export function connect(): void {
@@ -116,6 +123,12 @@ export async function bootstrap(): Promise<void> {
   logSubscription?.remove();
   buttonSubscription = MotoLink.addListener('onButton', onButton);
   logSubscription = MotoLink.addListener('onLog', (event) => appendLog(event.message));
+  mirrorSubscription?.remove();
+  mirrorSubscription = MotoLink.addListener('onMirrorState', (event) => {
+    setState({ mirroring: event.active });
+    appendLog(event.active ? 'screen mirroring started' : 'screen mirroring stopped');
+  });
+  setState({ mirroring: MotoLink.isMirroring() });
   await applyButtonMode();
   void startMetrics();
   const { bike, settings } = getState();

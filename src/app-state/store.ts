@@ -48,6 +48,8 @@ export interface AppState {
   logs: string[];
   /** Last raw button event and the gesture it became; shown on the Buttons screen. */
   lastButton: { raw: RawButtonEvent; gesture: Gesture | null; at: number } | null;
+  /** The phone screen is being mirrored to the dash instead of the app's own picture. */
+  mirroring: boolean;
 }
 
 const IDLE_LINK: SessionSnapshot = {
@@ -69,6 +71,7 @@ let state: AppState = {
   metrics: EMPTY_METRICS,
   logs: [],
   lastButton: null,
+  mirroring: false,
 };
 
 const listeners = new Set<() => void>();

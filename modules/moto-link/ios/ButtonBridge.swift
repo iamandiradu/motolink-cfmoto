@@ -14,6 +14,9 @@ import UIKit
 /// same silent audio keeps the app running while the phone is locked.
 final class ButtonBridge: NSObject {
   enum Mode: String {
+    /// No button capture, only the silent audio that keeps the app running
+    /// behind another app (needed while Waze is on screen).
+    case keepAlive
     /// Volume rocker only. Mixes with other audio, so music keeps playing.
     case volume
     /// Rocker plus transport keys. Takes over as the now-playing app; other music pauses.
@@ -43,7 +46,7 @@ final class ButtonBridge: NSObject {
     self.pinVolume = pinVolume
 
     let session = AVAudioSession.sharedInstance()
-    try session.setCategory(.playback, mode: .default, options: mode == .volume ? [.mixWithOthers] : [])
+    try session.setCategory(.playback, mode: .default, options: mode == .full ? [] : [.mixWithOthers])
     try session.setActive(true)
 
     let player = try AVAudioPlayer(data: ButtonBridge.silentWav(seconds: 1))
@@ -64,9 +67,11 @@ final class ButtonBridge: NSObject {
     }
 
     lastVolume = session.outputVolume
-    volumeObservation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, change in
-      guard let value = change.newValue else { return }
-      DispatchQueue.main.async { self?.volumeChanged(to: value) }
+    if mode != .keepAlive {
+      volumeObservation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, change in
+        guard let value = change.newValue else { return }
+        DispatchQueue.main.async { self?.volumeChanged(to: value) }
+      }
     }
     NotificationCenter.default.addObserver(
       self,
@@ -75,7 +80,7 @@ final class ButtonBridge: NSObject {
       object: session
     )
     active = true
-    if pinVolume { DispatchQueue.main.async { self.pin() } }
+    if pinVolume, mode != .keepAlive { DispatchQueue.main.async { self.pin() } }
   }
 
   func stop() {
