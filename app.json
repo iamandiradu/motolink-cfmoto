@@ -13,7 +13,6 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "MotoLink talks to the motorcycle dash over its Wi-Fi network.",
         "NSLocationWhenInUseUsageDescription": "MotoLink uses your location for speed, heading, trip distance and the map on the dash.",
-        "NSMotionUsageDescription": "MotoLink uses motion sensors to show lean angle.",
         "NSCameraUsageDescription": "MotoLink uses the camera to scan the pairing QR code on the dash.",
         "UIBackgroundModes": [
           "audio",

@@ -1,7 +1,7 @@
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DEFAULT_LAYOUT, isDefaultLayout, normaliseLayout, resolveAction, setMapping } from '../buttons/mapping';
 import { INITIAL_DASH_STATE, dashReducer } from '../dash/controller';
-import { TripComputer, compassPoint, formatDuration, haversineM } from '../metrics/trip';
+import { TripComputer, compassPoint, formatClock, formatDuration, gpsQuality, haversineM } from '../metrics/trip';
 
 describe('GestureDetector', () => {
   function setup(wantsDouble = false) {
@@ -168,13 +168,26 @@ describe('trip computer', () => {
     expect(trip.get().tripKm).toBe(0);
   });
 
-  it('tracks lean and keeps other fields between samples', () => {
+  it('reads zero and holds the last direction while stopped', () => {
     const trip = new TripComputer();
-    trip.add({ timestamp: 0, speedKmh: 30 });
-    trip.add({ timestamp: 10, leanDeg: -32 });
-    trip.add({ timestamp: 20, leanDeg: 12 });
-    expect(trip.get()).toMatchObject({ speedKmh: 30, leanDeg: 12, maxLeanDeg: 32 });
-    expect(trip.resetTrip().maxLeanDeg).toBe(0);
+    trip.add({ timestamp: 0, latitude: 45, longitude: 25, speedKmh: 60, headingDeg: 90, accuracyM: 5 });
+    // At a light: GPS speed wanders and course spins.
+    trip.add({ timestamp: 1000, latitude: 45, longitude: 25, speedKmh: 1.4, headingDeg: 251, accuracyM: 5 });
+    expect(trip.get()).toMatchObject({ speedKmh: 0, headingDeg: 90, maxSpeedKmh: 60 });
+  });
+
+  it('reset clears the trip but keeps the live reading', () => {
+    const trip = new TripComputer();
+    trip.add({ timestamp: 0, latitude: 45, longitude: 25, speedKmh: 40, accuracyM: 5 });
+    trip.add({ timestamp: 1000, latitude: 45.0001, longitude: 25, speedKmh: 40, accuracyM: 5 });
+    const after = trip.resetTrip();
+    expect(after).toMatchObject({ tripKm: 0, movingSeconds: 0, maxSpeedKmh: 0, avgSpeedKmh: 0, speedKmh: 40 });
+  });
+
+  it('rates the GPS signal', () => {
+    expect(gpsQuality(null)).toBe('none');
+    expect(gpsQuality(8)).toBe('good');
+    expect(gpsQuality(65)).toBe('poor');
   });
 
   it('formats', () => {
@@ -183,5 +196,6 @@ describe('trip computer', () => {
     expect(compassPoint(359)).toBe('N');
     expect(formatDuration(75)).toBe('01:15');
     expect(formatDuration(3725)).toBe('1:02:05');
+    expect(formatClock(new Date(2026, 10, 13, 7, 5))).toBe('07:05');
   });
 });

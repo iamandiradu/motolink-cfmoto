@@ -70,10 +70,6 @@ export async function startMetrics(): Promise<void> {
   }
 }
 
-export function calibrateLean(): void {
-  phoneSensors.calibrate();
-}
-
 /** Opens the iOS sheet that starts or stops mirroring the phone screen. */
 export function toggleMirroring(): void {
   void MotoLink.showBroadcastPicker().catch((error) => appendLog(`mirroring: ${String(error)}`));

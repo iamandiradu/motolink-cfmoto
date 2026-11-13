@@ -25,7 +25,7 @@ The Android projects are AGPL-3.0. Nothing was copied from them; this app is a f
 1. **Controlled by the motorcycle's buttons.** `ButtonBridge.swift` receives volume changes and media keys; `src/buttons/gestures.ts` turns them into gestures (press, double press); the dash UI moves a focus ring.
 2. **Default layout, customizable.** `src/buttons/mapping.ts` holds the default layout; the Buttons tab remaps any gesture and can restore the default.
 3. **Automatic connection after setup.** Credentials are saved after the first scan. The app asks iOS to join the dash Wi-Fi (and iOS rejoins a known network by itself), then `LinkSession` probes and reconnects in a loop, including after an ignition cycle.
-4. **Motorcycle metrics.** Speed, heading, altitude, lean angle and a trip computer from the phone. `MetricsSource` is the seam for an OBD-II source.
+4. **Motorcycle metrics.** Speed, direction of travel, altitude and a trip computer from the phone's GPS. Lean angle was dropped: it needs a rigidly mounted phone. `MetricsSource` is the seam for an OBD-II source.
 
 ## Architecture
 

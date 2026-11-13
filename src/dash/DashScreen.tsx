@@ -3,12 +3,12 @@
  * dash asked for and read at a glance from a metre away: few items, large
  * type, high contrast. No touch; a focus ring shows what Select will do.
  */
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
 
 import { useAppState } from '../app-state/store';
-import { Metrics, compassPoint, formatDuration } from '../metrics/trip';
+import { Metrics, compassPoint, formatClock, formatDuration, gpsQuality } from '../metrics/trip';
 import { DashPage, DashState, PAGES, PAGE_ITEMS, PAGE_TITLES } from './controller';
 
 interface Palette {
@@ -50,6 +50,16 @@ function useUnits() {
   };
 }
 
+/** Time of day, refreshed often enough that the minute never lags visibly. */
+function useClock(): string {
+  const [now, setNow] = useState(() => formatClock(new Date()));
+  useEffect(() => {
+    const timer = setInterval(() => setNow(formatClock(new Date())), 5000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+
 function Focusable(props: { focused: boolean; palette: Palette; children: ReactNode; grow?: boolean }) {
   const { focused, palette } = props;
   return (
@@ -79,13 +89,14 @@ function Stat(props: { label: string; value: string; unit?: string; palette: Pal
 
 function RidePage({ metrics, dash, palette }: PageProps) {
   const units = useUnits();
-  const lean = metrics.leanDeg === null ? '--' : `${Math.abs(Math.round(metrics.leanDeg))}°`;
-  const leanSide = metrics.leanDeg === null || Math.abs(metrics.leanDeg) < 1 ? '' : metrics.leanDeg > 0 ? 'R' : 'L';
+  const clock = useClock();
   return (
     <View style={styles.row}>
       <View style={styles.speedBlock}>
         <Text style={[styles.speed, { color: palette.text }]}>{units.speed(metrics.speedKmh)}</Text>
-        <Text style={[styles.speedUnit, { color: palette.dim }]}>{units.speedUnit}</Text>
+        <Text style={[styles.speedUnit, { color: gpsQuality(metrics.accuracyM) === 'good' ? palette.dim : palette.warn }]}>
+          {gpsQuality(metrics.accuracyM) === 'good' ? units.speedUnit : gpsQuality(metrics.accuracyM) === 'poor' ? 'weak GPS' : 'no GPS'}
+        </Text>
       </View>
       <View style={styles.column}>
         <View style={styles.row}>
@@ -95,7 +106,7 @@ function RidePage({ metrics, dash, palette }: PageProps) {
             unit={metrics.headingDeg === null ? undefined : `${Math.round(metrics.headingDeg)}°`}
             palette={palette}
           />
-          <Stat label="LEAN" value={lean} unit={leanSide} palette={palette} />
+          <Stat label="TIME" value={clock} palette={palette} />
         </View>
         <View style={styles.row}>
           <Stat label="TRIP" value={units.distance(metrics.tripKm)} unit={units.distanceUnit} palette={palette} />
@@ -172,7 +183,6 @@ function TripPage({ metrics, dash, palette }: PageProps) {
       <View style={styles.row}>
         <Stat label="AVERAGE" value={units.speed(metrics.avgSpeedKmh)} unit={units.speedUnit} palette={palette} />
         <Stat label="TOP" value={units.speed(metrics.maxSpeedKmh)} unit={units.speedUnit} palette={palette} />
-        <Stat label="MAX LEAN" value={`${Math.round(metrics.maxLeanDeg)}°`} palette={palette} />
         <Focusable focused={dash.focus === 0} palette={palette}>
           <Text style={[styles.button, { color: palette.warn }]}>Reset trip</Text>
         </Focusable>
