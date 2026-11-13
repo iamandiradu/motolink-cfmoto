@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name           = 'MotoLink'
+  s.name           = 'MotoLinkNative'
   s.version        = '1.0.0'
   s.summary        = 'Native transport for the CFMOTO MotoPlay dash link'
   s.description    = 'TCP listeners, H.264 encoder, RSA identity, Wi-Fi join and handlebar button capture.'
