@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { connect, disconnect, toggleMirroring } from '../../app-state/controller';
-import { saveBike, useAppState } from '../../app-state/store';
+import { dismissHint, saveBike, useAppState } from '../../app-state/store';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
-import { Body, Button, Card, Row, Screen, colors } from '../../ui/kit';
+import { Body, Button, Card, Hint, Row, Screen, colors } from '../../ui/kit';
 
 const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string }> = {
   idle: { title: 'Not connected', hint: 'Tap Connect with the bike switched on.', color: colors.dim },
@@ -22,19 +22,48 @@ const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string
   streaming: { title: 'On the dash', hint: 'The dash is showing the picture above.', color: colors.ok },
 };
 
+const NAV_APPS = [
+  { label: 'Apple Maps', url: 'maps://' },
+  { label: 'Google Maps', url: 'comgooglemaps://' },
+  { label: 'Waze', url: 'waze://' },
+] as const;
+
 function MirrorCard({ mirroring }: { mirroring: boolean }) {
+  const [missing, setMissing] = useState<string | null>(null);
+
+  const open = (app: (typeof NAV_APPS)[number]) => {
+    setMissing(null);
+    Linking.openURL(app.url).catch(() => setMissing(app.label));
+  };
+
   return (
-    <Card title="Show Waze on the dash">
+    <Card title="Show the phone screen on the dash">
       <View style={styles.statusRow}>
         <View style={[styles.dot, { backgroundColor: mirroring ? colors.ok : colors.dim }]} />
-        <Text style={styles.statusTitle}>{mirroring ? 'Mirroring the phone screen' : 'Showing ride data'}</Text>
+        <Text style={styles.statusTitle}>{mirroring ? 'Mirroring is on' : 'Mirroring is off'}</Text>
       </View>
       <Body dim>
         {mirroring
-          ? 'The dash shows whatever is on this phone. Open Waze and turn the phone sideways so the map fills the dash. Keep the screen on.'
-          : 'Mirroring sends the whole phone screen to the dash, so any app works: Waze, Google Maps, Spotify. Tap below, choose MotoLink, then Start Broadcast.'}
+          ? 'The dash shows whatever is on this phone. Open a navigation app and turn the phone sideways so the map fills the dash.'
+          : 'Works with any app: Apple Maps, Google Maps, Waze, Spotify. Tap Start, choose MotoLink, then Start Broadcast.'}
       </Body>
-      <Button label={mirroring ? 'Stop mirroring' : 'Start mirroring'} kind={mirroring ? 'plain' : 'primary'} onPress={toggleMirroring} />
+      <Button
+        label={mirroring ? 'Stop mirroring' : 'Start mirroring'}
+        kind={mirroring ? 'plain' : 'primary'}
+        onPress={toggleMirroring}
+      />
+      {mirroring ? (
+        <>
+          <View style={styles.apps}>
+            {NAV_APPS.map((app) => (
+              <View key={app.label} style={styles.app}>
+                <Button label={app.label} kind="plain" onPress={() => open(app)} />
+              </View>
+            ))}
+          </View>
+          {missing ? <Text style={styles.error}>{missing} is not installed on this phone.</Text> : null}
+        </>
+      ) : null}
     </Card>
   );
 }
@@ -43,6 +72,7 @@ export default function LinkScreen() {
   const bike = useAppState((s) => s.bike);
   const link = useAppState((s) => s.link);
   const mirroring = useAppState((s) => s.mirroring);
+  const showRideHint = useAppState((s) => !s.settings.dismissedHints.includes('before-ride'));
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
 
@@ -128,13 +158,13 @@ export default function LinkScreen() {
         />
       </Card>
 
-      <Card title="Before you ride">
-        <Body dim>
-          Close the CFMOTO app: it uses the same connection and the dash will talk to it instead. The ride data
-          picture needs this app on screen. Mirroring keeps working with another app in front, as long as the
-          phone screen stays on.
-        </Body>
-      </Card>
+      {showRideHint ? (
+        <Hint title="Before you ride" onDismiss={() => dismissHint('before-ride')}>
+          <Body dim>Close the CFMOTO app. It uses the same connection, and the dash would talk to it instead.</Body>
+          <Body dim>Keep the phone screen on. Mirroring works with another app in front, but not with the phone locked.</Body>
+          <Body dim>Set your route before moving. The handlebar buttons cannot steer other apps.</Body>
+        </Hint>
+      ) : null}
     </Screen>
   );
 }
@@ -153,4 +183,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
+  apps: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  app: { flexGrow: 1 },
 });

@@ -16,13 +16,13 @@ This is not Apple CarPlay. The dash speaks Carbit EasyConn, not CarPlay, and iOS
 
 Next time: ignition on, open the app. It connects by itself.
 
-## Waze, Google Maps or Spotify on the dash
+## Apple Maps, Google Maps, Waze or Spotify on the dash
 
 The app can mirror the whole phone screen to the dash, so any app shows up there.
 
 1. Connect to the bike as above.
 2. On the **Link** tab tap **Start mirroring**, choose MotoLink, then **Start Broadcast**.
-3. Open Waze and turn the phone sideways. A sideways screen fills the dash; an upright one is shown between black bars.
+3. Open the app you want (the card has shortcuts to Apple Maps, Google Maps and Waze) and turn the phone sideways. A sideways screen fills the dash; an upright one is shown between black bars.
 
 Limits, all from iOS:
 
@@ -36,13 +36,13 @@ To stop, tap **Stop mirroring**, or the red indicator at the top of the phone sc
 
 | Handlebar | Default action |
 | --- | --- |
-| Up | Previous item |
-| Down | Next item |
+| Up, press | Previous item |
 | Up, double press | Home |
+| Up, hold | Previous page |
+| Down, press | Next item |
 | Down, double press | Back |
-| Select / Enter | Select |
-| Next (or hold Up) | Next page |
-| Previous (or hold Down) | Previous page |
+| Down, hold | Next page |
+| Select | Select |
 
 Every row can be changed in the **Buttons** tab, which also shows what the phone received for the last press. Which of these the 450 MT actually sends is not documented anywhere yet; that screen is how to find out.
 

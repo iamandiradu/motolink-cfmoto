@@ -1,6 +1,6 @@
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DEFAULT_LAYOUT, isDefaultLayout, normaliseLayout, resolveAction, setMapping } from '../buttons/mapping';
-import { INITIAL_DASH_STATE, dashReducer } from '../dash/controller';
+import { INITIAL_DASH_STATE, dashReducer, showPage, tapItem } from '../dash/controller';
 import { TripComputer, compassPoint, formatClock, formatDuration, gpsQuality, haversineM } from '../metrics/trip';
 
 describe('GestureDetector', () => {
@@ -132,6 +132,15 @@ describe('dash controller', () => {
     expect(run('pageNext', 'home').page).toBe('ride');
   });
 
+  it('handles taps from the phone preview', () => {
+    expect(showPage(INITIAL_DASH_STATE, 'trip')).toMatchObject({ page: 'trip', focus: 0 });
+    // Ride page: its one item is the Map button.
+    expect(tapItem(INITIAL_DASH_STATE, 0).page).toBe('map');
+    // Map page: second item zooms out, and takes the focus ring with it.
+    expect(tapItem(showPage(INITIAL_DASH_STATE, 'map'), 1)).toMatchObject({ zoom: 14, focus: 1 });
+    expect(tapItem(INITIAL_DASH_STATE, 7)).toBe(INITIAL_DASH_STATE);
+  });
+
   it('clamps zoom', () => {
     let state = INITIAL_DASH_STATE;
     for (let i = 0; i < 30; i++) state = dashReducer(state, 'zoomIn');
@@ -182,6 +191,16 @@ describe('trip computer', () => {
     trip.add({ timestamp: 1000, latitude: 45.0001, longitude: 25, speedKmh: 40, accuracyM: 5 });
     const after = trip.resetTrip();
     expect(after).toMatchObject({ tripKm: 0, movingSeconds: 0, maxSpeedKmh: 0, avgSpeedKmh: 0, speedKmh: 40 });
+  });
+
+  it('blanks the live speed when GPS goes quiet, and keeps the trip', () => {
+    const trip = new TripComputer();
+    trip.add({ timestamp: 0, latitude: 45, longitude: 25, speedKmh: 72, accuracyM: 5 });
+    trip.add({ timestamp: 1000, latitude: 45.0002, longitude: 25, speedKmh: 72, accuracyM: 5 });
+    const km = trip.get().tripKm;
+    const stale = trip.markStale();
+    expect(stale).toMatchObject({ speedKmh: null, accuracyM: null, tripKm: km, maxSpeedKmh: 72 });
+    expect(trip.markStale()).toBe(stale);
   });
 
   it('rates the GPS signal', () => {

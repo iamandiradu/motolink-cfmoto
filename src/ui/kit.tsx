@@ -32,6 +32,26 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
   );
 }
 
+/** An explanation the reader can close for good. */
+export function Hint(props: { title: string; children: ReactNode; onDismiss: () => void }) {
+  return (
+    <View style={[styles.card, styles.hint]}>
+      <View style={styles.hintHeader}>
+        <Text style={styles.cardTitle}>{props.title}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss: ${props.title}`}
+          hitSlop={12}
+          onPress={props.onDismiss}
+          style={styles.hintClose}>
+          <Text style={styles.hintCloseGlyph}>✕</Text>
+        </Pressable>
+      </View>
+      {props.children}
+    </View>
+  );
+}
+
 export function Body({ children, dim }: { children: ReactNode; dim?: boolean }) {
   return <Text style={[styles.body, dim && { color: colors.dim }]}>{children}</Text>;
 }
@@ -105,7 +125,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   screenContent: { padding: 16, gap: 14, paddingBottom: 40 },
   card: { backgroundColor: colors.card, borderRadius: 14, padding: 16, gap: 10 },
-  cardTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  cardTitle: { color: colors.text, fontSize: 17, fontWeight: '700', flexShrink: 1 },
+  hint: { borderWidth: 1, borderColor: colors.line },
+  hintHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  hintClose: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.line },
+  hintCloseGlyph: { color: colors.text, fontSize: 15, fontWeight: '700' },
   body: { color: colors.text, fontSize: 15, lineHeight: 21 },
   button: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   buttonLabel: { fontSize: 16, fontWeight: '700' },

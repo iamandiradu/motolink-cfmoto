@@ -96,6 +96,17 @@ function activate(state: DashState): DashState {
   }
 }
 
+/** Jumps straight to a page. Used by taps on the phone preview. */
+export function showPage(state: DashState, page: DashPage): DashState {
+  return goTo(state, page);
+}
+
+/** Focuses one item of the current page and activates it, as a tap does. */
+export function tapItem(state: DashState, index: number): DashState {
+  if (index < 0 || index >= PAGE_ITEMS[state.page].length) return state;
+  return activate({ ...state, focus: index });
+}
+
 export function dashReducer(state: DashState, action: DashAction): DashState {
   switch (action) {
     case 'focusNext':

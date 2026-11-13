@@ -4,9 +4,10 @@
  * type, high contrast. No touch; a focus ring shows what Select will do.
  */
 import { ReactNode, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
 
+import { tapDashItem, tapDashPage } from '../app-state/controller';
 import { useAppState } from '../app-state/store';
 import { Metrics, compassPoint, formatClock, formatDuration, gpsQuality } from '../metrics/trip';
 import { DashPage, DashState, PAGES, PAGE_ITEMS, PAGE_TITLES } from './controller';
@@ -60,17 +61,24 @@ function useClock(): string {
   return now;
 }
 
-function Focusable(props: { focused: boolean; palette: Palette; children: ReactNode; grow?: boolean }) {
-  const { focused, palette } = props;
+/**
+ * An item the handlebar buttons can focus. `index` is its place in the page's
+ * focus order; tapping it in the phone preview does what Select does.
+ */
+function Focusable(props: { index: number; focus: number; palette: Palette; children: ReactNode; grow?: boolean }) {
+  const { palette } = props;
+  const focused = props.index === props.focus;
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => tapDashItem(props.index)}
       style={[
         styles.focusable,
         { backgroundColor: palette.panel, borderColor: focused ? palette.accent : 'transparent' },
         props.grow && styles.grow,
       ]}>
       {props.children}
-    </View>
+    </Pressable>
   );
 }
 
@@ -117,7 +125,7 @@ function RidePage({ metrics, dash, palette }: PageProps) {
             palette={palette}
           />
         </View>
-        <Focusable focused={dash.focus === 0} palette={palette}>
+        <Focusable index={0} focus={dash.focus} palette={palette}>
           <Text style={[styles.button, { color: palette.text }]}>Map ›</Text>
         </Focusable>
       </View>
@@ -163,7 +171,7 @@ function MapPage({ metrics, dash, palette }: PageProps) {
       </View>
       <View style={styles.mapButtons}>
         {items.map((item, index) => (
-          <Focusable key={item} focused={dash.focus === index} palette={palette} grow>
+          <Focusable key={item} index={index} focus={dash.focus} palette={palette} grow>
             <Text style={[styles.mapButton, { color: palette.text }]}>{labels[item]}</Text>
           </Focusable>
         ))}
@@ -183,7 +191,7 @@ function TripPage({ metrics, dash, palette }: PageProps) {
       <View style={styles.row}>
         <Stat label="AVERAGE" value={units.speed(metrics.avgSpeedKmh)} unit={units.speedUnit} palette={palette} />
         <Stat label="TOP" value={units.speed(metrics.maxSpeedKmh)} unit={units.speedUnit} palette={palette} />
-        <Focusable focused={dash.focus === 0} palette={palette}>
+        <Focusable index={0} focus={dash.focus} palette={palette}>
           <Text style={[styles.button, { color: palette.warn }]}>Reset trip</Text>
         </Focusable>
       </View>
@@ -201,7 +209,7 @@ function MenuPage({ dash, palette }: PageProps) {
   return (
     <View style={styles.menu}>
       {PAGE_ITEMS.menu.map((item, index) => (
-        <Focusable key={item} focused={dash.focus === index} palette={palette} grow>
+        <Focusable key={item} index={index} focus={dash.focus} palette={palette} grow>
           <Text style={[styles.menuItem, { color: palette.text }]}>{labels[item]}</Text>
         </Focusable>
       ))}
@@ -232,15 +240,16 @@ export function DashScreen() {
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
       <View style={styles.header}>
         {PAGES.map((page) => (
-          <Text
-            key={page}
-            style={[
-              styles.tab,
-              { color: page === dash.page ? palette.accent : palette.dim },
-              page === dash.page && { borderBottomColor: palette.accent },
-            ]}>
-            {PAGE_TITLES[page].toUpperCase()}
-          </Text>
+          <Pressable key={page} accessibilityRole="tab" hitSlop={12} onPress={() => tapDashPage(page)}>
+            <Text
+              style={[
+                styles.tab,
+                { color: page === dash.page ? palette.accent : palette.dim },
+                page === dash.page && { borderBottomColor: palette.accent },
+              ]}>
+              {PAGE_TITLES[page].toUpperCase()}
+            </Text>
+          </Pressable>
         ))}
       </View>
       <View style={styles.body}>

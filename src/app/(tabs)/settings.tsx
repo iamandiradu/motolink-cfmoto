@@ -1,7 +1,7 @@
 import { StyleSheet, Text } from 'react-native';
 
 import { dispatchDashAction } from '../../app-state/controller';
-import { saveSettings, setState, useAppState } from '../../app-state/store';
+import { restoreHints, saveSettings, setState, useAppState } from '../../app-state/store';
 import { Body, Button, Card, Choice, Screen, colors } from '../../ui/kit';
 
 export default function SettingsScreen() {
@@ -78,6 +78,16 @@ export default function SettingsScreen() {
             { value: 0, label: 'Older dash (default)' },
             { value: 128, label: 'Newer dash' },
           ]}
+        />
+      </Card>
+
+      <Card title="Tips">
+        <Body dim>Bring back the explanation cards you closed.</Body>
+        <Button
+          label="Show tips again"
+          kind="plain"
+          disabled={settings.dismissedHints.length === 0}
+          onPress={restoreHints}
         />
       </Card>
 

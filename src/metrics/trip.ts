@@ -119,6 +119,17 @@ export class TripComputer {
     return this.metrics;
   }
 
+  /**
+   * GPS went quiet (tunnel, permission withdrawn). Blank the live speed and
+   * signal instead of showing the last reading as if it were current.
+   */
+  markStale(): Metrics {
+    if (this.metrics.speedKmh === null && this.metrics.accuracyM === null) return this.metrics;
+    this.metrics = { ...this.metrics, speedKmh: null, accuracyM: null };
+    this.lastFix = null;
+    return this.metrics;
+  }
+
   add(sample: MetricsSample): Metrics {
     const next: Metrics = { ...this.metrics };
     const accurate = sample.accuracyM === undefined || sample.accuracyM <= MAX_ACCURACY_M;

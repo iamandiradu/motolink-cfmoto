@@ -4,7 +4,8 @@ import UIKit
 
 /// The picture sent to the dash. React Native lays its children out at the
 /// exact size the dash asked for; the capturer below snapshots this view and
-/// feeds the encoder. The phone screen can show it scaled down as a preview:
+/// feeds the encoder. It stays touchable: the dash has no touch screen, but
+/// on the phone the preview can be tapped to try the pages. The phone screen can show it scaled down as a preview:
 /// an ancestor transform does not affect the snapshot.
 class MotoLinkView: ExpoView {
   /// Most recently mounted surface. There is one dash, so one surface.
@@ -14,7 +15,6 @@ class MotoLinkView: ExpoView {
     super.init(appContext: appContext)
     clipsToBounds = true
     backgroundColor = .black
-    isUserInteractionEnabled = false
     MotoLinkView.current = self
   }
 

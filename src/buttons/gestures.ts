@@ -30,16 +30,46 @@ export const GESTURES = [
 export type Gesture = (typeof GESTURES)[number];
 
 export const GESTURE_LABELS: Record<Gesture, string> = {
-  upPress: 'Up',
-  upDouble: 'Up ×2',
-  downPress: 'Down',
-  downDouble: 'Down ×2',
-  selectPress: 'Select / Enter',
-  nextPress: 'Next (or hold Up)',
-  nextDouble: 'Next ×2',
-  previousPress: 'Previous (or hold Down)',
-  previousDouble: 'Previous ×2',
+  upPress: 'Up, press',
+  upDouble: 'Up, double press',
+  downPress: 'Down, press',
+  downDouble: 'Down, double press',
+  selectPress: 'Select, press',
+  nextPress: 'Down, hold',
+  nextDouble: 'Down, hold twice',
+  previousPress: 'Up, hold',
+  previousDouble: 'Up, hold twice',
 };
+
+/**
+ * Gestures grouped by the physical button that produces them. On the 450 MT
+ * the owner's manual says a long press of Up sends "previous song"; Down is
+ * taken to mirror it with "next song".
+ */
+export const BUTTON_GROUPS: readonly { button: string; gestures: readonly { gesture: Gesture; label: string }[] }[] = [
+  {
+    button: 'Up',
+    gestures: [
+      { gesture: 'upPress', label: 'Press' },
+      { gesture: 'upDouble', label: 'Double press' },
+      { gesture: 'previousPress', label: 'Hold' },
+      { gesture: 'previousDouble', label: 'Hold twice' },
+    ],
+  },
+  {
+    button: 'Down',
+    gestures: [
+      { gesture: 'downPress', label: 'Press' },
+      { gesture: 'downDouble', label: 'Double press' },
+      { gesture: 'nextPress', label: 'Hold' },
+      { gesture: 'nextDouble', label: 'Hold twice' },
+    ],
+  },
+  {
+    button: 'Select',
+    gestures: [{ gesture: 'selectPress', label: 'Press' }],
+  },
+];
 
 export interface GestureTiming {
   /** Two transport keys inside this window form a double tap. */

@@ -5,7 +5,7 @@
 import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DashAction, resolveAction } from '../buttons/mapping';
-import { dashReducer } from '../dash/controller';
+import { DashPage, DashState, dashReducer, showPage, tapItem } from '../dash/controller';
 import { nativeTransport } from '../link/nativeTransport';
 import { PhoneSensorSource } from '../metrics/phoneSensors';
 import { TripComputer } from '../metrics/trip';
@@ -22,11 +22,28 @@ let mirrorSubscription: { remove(): void } | null = null;
 const trip = new TripComputer();
 const phoneSensors = new PhoneSensorSource();
 let metricsRunning = false;
+let lastSampleAt = 0;
+/** No GPS reading for this long means the shown speed is no longer true. */
+const GPS_STALE_MS = 5000;
 
 /** Runs a dash action, whether it came from a handlebar button or the phone screen. */
 export function dispatchDashAction(action: DashAction): void {
+  applyDash((state) => dashReducer(state, action));
+}
+
+/** A tap on a page tab in the phone preview. The dash itself has no touch. */
+export function tapDashPage(page: DashPage): void {
+  applyDash((state) => showPage(state, page));
+}
+
+/** A tap on a focusable item in the phone preview. */
+export function tapDashItem(index: number): void {
+  applyDash((state) => tapItem(state, index));
+}
+
+function applyDash(change: (state: DashState) => DashState): void {
   const before = getState().dash;
-  const after = dashReducer(before, action);
+  const after = change(before);
   if (after === before) return;
   setState({ dash: after });
   if (after.tripResetToken !== before.tripResetToken) setState({ metrics: trip.resetTrip() });
@@ -63,7 +80,15 @@ export async function startMetrics(): Promise<void> {
   if (metricsRunning) return;
   metricsRunning = true;
   try {
-    await phoneSensors.start((sample) => setState({ metrics: trip.add(sample) }));
+    await phoneSensors.start((sample) => {
+      lastSampleAt = Date.now();
+      setState({ metrics: trip.add(sample) });
+    });
+    setInterval(() => {
+      if (Date.now() - lastSampleAt < GPS_STALE_MS) return;
+      const stale = trip.markStale();
+      if (stale !== getState().metrics) setState({ metrics: stale });
+    }, 2000);
   } catch (error) {
     metricsRunning = false;
     appendLog(`metrics: ${String(error)}`);

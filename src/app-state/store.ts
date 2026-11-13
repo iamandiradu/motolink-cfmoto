@@ -25,6 +25,8 @@ export interface Settings {
   /** 0 for older dashes, 128 for newer ones. Change it if the dash connects but never shows a picture. */
   supportFunction: 0 | 128;
   units: 'metric' | 'imperial';
+  /** Ids of explanation cards the rider has closed. */
+  dismissedHints: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   identityOs: 'Android',
   supportFunction: 0,
   units: 'metric',
+  dismissedHints: [],
 };
 
 export interface AppState {
@@ -140,6 +143,15 @@ export function saveSettings(patch: Partial<Settings>): void {
   const settings = { ...state.settings, ...patch };
   setState({ settings });
   write(KEYS.settings, settings);
+}
+
+export function dismissHint(id: string): void {
+  if (state.settings.dismissedHints.includes(id)) return;
+  saveSettings({ dismissedHints: [...state.settings.dismissedHints, id] });
+}
+
+export function restoreHints(): void {
+  saveSettings({ dismissedHints: [] });
 }
 
 export function saveLayout(layout: ButtonLayout): void {
