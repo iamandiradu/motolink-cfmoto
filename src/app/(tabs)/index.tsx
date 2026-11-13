@@ -10,7 +10,7 @@ import {
   setMirrorStrip,
   toggleMirroring,
 } from '../../app-state/controller';
-import { dismissHint, saveBike, useAppState } from '../../app-state/store';
+import { dismissHint, saveBike, saveSettings, useAppState } from '../../app-state/store';
 import { DEFAULT_MIRROR_VIEW, MirrorView, PresetApp, isDefaultView, presetApps } from '../../mirror/presets';
 
 const PRESET_APPS = presetApps(Platform.OS);
@@ -179,6 +179,9 @@ export default function LinkScreen() {
       return;
     }
     setManualError(null);
+    // Testing aid: a pasted link may carry `simhost=<address>` to point the app at the dash simulator.
+    const simHost = /[?&]simhost=([^&#]+)/.exec(manual)?.[1];
+    if (simHost) saveSettings({ dashHostOverride: decodeURIComponent(simHost) });
     setManual('');
     saveBike(parsed);
     connect();
@@ -204,6 +207,8 @@ export default function LinkScreen() {
             autoCorrect={false}
             style={styles.input}
             accessibilityLabel="QR link"
+            returnKeyType="go"
+            onSubmitEditing={pairFromText}
           />
           {manualError ? <Text style={styles.error}>{manualError}</Text> : null}
           <Button label="Pair" kind="plain" onPress={pairFromText} disabled={manual.trim().length === 0} />

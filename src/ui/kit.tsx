@@ -27,7 +27,13 @@ export const GloveContext = createContext({ touch: 48, bump: 0 });
 
 export function Screen({ children }: { children: ReactNode }) {
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.screenContent}
+      // Keep a focused field above the keyboard, and let a tap on a button work while it is up.
+      automaticallyAdjustKeyboardInsets
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag">
       {children}
     </ScrollView>
   );
