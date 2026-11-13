@@ -1,14 +1,20 @@
-import { StyleSheet, Text } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, TextInput } from 'react-native';
 
-import { dispatchDashAction, setBikeBluetooth } from '../../app-state/controller';
+import { setBikeBluetooth, setDashTheme } from '../../app-state/controller';
 import { restoreHints, saveSettings, setState, useAppState } from '../../app-state/store';
-import { Body, Button, Card, Choice, Screen, colors } from '../../ui/kit';
+import { THEMES, THEME_LABELS } from '../../dash/controller';
+import { REDIRECT_URI } from '../../spotify/api';
+import { connectSpotify, disconnectSpotify, setSpotifyClientId } from '../../spotify/session';
+import { Body, Button, Card, Choice, Row, Screen, colors } from '../../ui/kit';
 
 export default function SettingsScreen() {
   const settings = useAppState((s) => s.settings);
   const theme = useAppState((s) => s.dash.theme);
   const logs = useAppState((s) => s.logs);
   const outputs = useAppState((s) => s.bluetoothOutputs);
+  const spotify = useAppState((s) => s.spotify);
+  const [clientId, setClientId] = useState(settings.spotifyClientId);
   const candidate = outputs.find((name) => name !== settings.bikeBluetooth) ?? null;
 
   return (
@@ -64,15 +70,60 @@ export default function SettingsScreen() {
         ) : null}
       </Card>
 
+      <Card title="Spotify on the dash">
+        {spotify.connected ? (
+          <>
+            <Body>Connected. The Music page on the dash shows what Spotify is playing.</Body>
+            {spotify.playback ? (
+              <Row label="Now" value={`${spotify.playback.title} · ${spotify.playback.artist}`} />
+            ) : null}
+            <Button label="Disconnect Spotify" kind="plain" onPress={() => void disconnectSpotify()} />
+          </>
+        ) : (
+          <>
+            <Body dim>
+              iOS does not let one app see what another is playing, so the Music page asks Spotify directly. That
+              needs your own free Spotify developer app, set up once:
+            </Body>
+            <Body dim>1. Open developer.spotify.com, sign in, Create app.</Body>
+            <Body dim selectable>
+              2. Redirect URI: {REDIRECT_URI}
+            </Body>
+            <Body dim>3. Tick Web API, save, then copy the Client ID here.</Body>
+            <TextInput
+              value={clientId}
+              onChangeText={setClientId}
+              onEndEditing={() => setSpotifyClientId(clientId)}
+              placeholder="Client ID"
+              placeholderTextColor={colors.dim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+              accessibilityLabel="Spotify client ID"
+            />
+            <Button
+              label="Connect Spotify"
+              disabled={clientId.trim().length === 0}
+              onPress={() => {
+                setSpotifyClientId(clientId);
+                void connectSpotify();
+              }}
+            />
+          </>
+        )}
+        {spotify.error ? <Text style={styles.error}>{spotify.error}</Text> : null}
+        <Body dim>
+          Play, pause and skip need Spotify Premium. The page needs mobile data. YouTube Music offers no way to do
+          this; mirror its screen instead.
+        </Body>
+      </Card>
+
       <Card title="Dash picture">
-        <Body dim>Day or night colours.</Body>
+        <Body dim>Colours, after the CFMOTO liveries.</Body>
         <Choice
           value={theme}
-          onChange={(value) => value !== theme && dispatchDashAction('toggleTheme')}
-          options={[
-            { value: 'night', label: 'Night' },
-            { value: 'day', label: 'Day' },
-          ]}
+          onChange={setDashTheme}
+          options={THEMES.map((value) => ({ value, label: THEME_LABELS[value] }))}
         />
         <Body dim>Units.</Body>
         <Choice
@@ -143,5 +194,15 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  input: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    color: colors.text,
+    fontSize: 15,
+  },
+  error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   log: { color: colors.dim, fontSize: 12, lineHeight: 17, fontFamily: 'Menlo' },
 });

@@ -32,6 +32,21 @@ Limits, all from iOS:
 
 To stop, tap **Stop mirroring**, or the red indicator at the top of the phone screen.
 
+## Spotify on the dash
+
+The dash has a **Music** page: cover, title, artist, progress, and previous / play / next that the handlebar buttons can reach. Handlebar gestures can also be mapped straight to Spotify play, next and previous in the Buttons tab.
+
+iOS lets no app see what another app is playing, so the page asks Spotify's servers. Set it up once in **Settings → Spotify on the dash**:
+
+1. At developer.spotify.com create an app. Redirect URI: `motolink://spotify`. Tick Web API.
+2. Paste its Client ID into the app and tap **Connect Spotify**.
+
+It needs mobile data while riding, and the controls need Spotify Premium. YouTube Music has no such interface; mirror its screen instead.
+
+## Colours
+
+The dash picture has four themes after the CFMOTO liveries: black with blue and pink, gray, graphite, and a light one for daylight. Choose in Settings, or from the Menu page on the dash.
+
 ## Buttons
 
 | Handlebar | Default action |

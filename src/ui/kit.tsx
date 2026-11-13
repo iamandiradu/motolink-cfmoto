@@ -3,14 +3,16 @@ import { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export const colors = {
-  bg: '#0b0f14',
-  card: '#151b23',
-  line: '#26303b',
-  text: '#eef2f6',
-  dim: '#8b98a5',
-  accent: '#19c2d1',
-  onAccent: '#04262a',
-  danger: '#ff6b5e',
+  bg: '#000000',
+  card: '#12161c',
+  line: '#2a323c',
+  text: '#f2f5f8',
+  dim: '#93a1b0',
+  /** CFMOTO blue. */
+  accent: '#00aeef',
+  onAccent: '#001a26',
+  /** CFMOTO pink: destructive actions and errors. */
+  danger: '#ff3d97',
   ok: '#3ddc84',
   warn: '#ffb020',
 };
@@ -52,8 +54,12 @@ export function Hint(props: { title: string; children: ReactNode; onDismiss: () 
   );
 }
 
-export function Body({ children, dim }: { children: ReactNode; dim?: boolean }) {
-  return <Text style={[styles.body, dim && { color: colors.dim }]}>{children}</Text>;
+export function Body({ children, dim, selectable }: { children: ReactNode; dim?: boolean; selectable?: boolean }) {
+  return (
+    <Text selectable={selectable} style={[styles.body, dim && { color: colors.dim }]}>
+      {children}
+    </Text>
+  );
 }
 
 export function Button(props: {

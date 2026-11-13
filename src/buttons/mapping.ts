@@ -17,6 +17,9 @@ export const ACTIONS = [
   'zoomOut',
   'toggleTheme',
   'resetTrip',
+  'musicPlayPause',
+  'musicNext',
+  'musicPrevious',
 ] as const;
 
 export type DashAction = (typeof ACTIONS)[number];
@@ -32,8 +35,11 @@ export const ACTION_LABELS: Record<DashAction, string> = {
   pagePrevious: 'Previous page',
   zoomIn: 'Map zoom in',
   zoomOut: 'Map zoom out',
-  toggleTheme: 'Day / night',
+  toggleTheme: 'Next colour theme',
   resetTrip: 'Reset trip',
+  musicPlayPause: 'Spotify play / pause',
+  musicNext: 'Spotify next song',
+  musicPrevious: 'Spotify previous song',
 };
 
 export type ButtonLayout = Record<Gesture, DashAction>;

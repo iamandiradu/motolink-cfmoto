@@ -144,7 +144,7 @@ describe('dash controller', () => {
   it('cycles pages and resets focus', () => {
     expect(run('pageNext').page).toBe('map');
     expect(run('pagePrevious').page).toBe('menu');
-    expect(run('pageNext', 'focusNext', 'pageNext').focus).toBe(0);
+    expect(run('pageNext', 'focusNext', 'pagePrevious').focus).toBe(0);
   });
 
   it('wraps focus within a page', () => {
@@ -157,8 +157,9 @@ describe('dash controller', () => {
     expect(run('pageNext', 'select').zoom).toBe(16);
     expect(run('pageNext', 'focusNext', 'select').zoom).toBe(14);
     expect(run('pagePrevious', 'focusNext', 'select').page).toBe('map');
-    expect(run('pagePrevious', 'focusPrevious', 'select').theme).toBe('day');
-    expect(run('pageNext', 'pageNext', 'select').tripResetToken).toBe(1);
+    // Menu: the last item steps through the colour themes.
+    expect(run('pagePrevious', 'focusPrevious', 'select').theme).toBe('gray');
+    expect(run('pageNext', 'pageNext', 'pageNext', 'select').tripResetToken).toBe(1);
   });
 
   it('back opens the menu, home returns to the ride page', () => {
@@ -169,11 +170,30 @@ describe('dash controller', () => {
 
   it('handles taps from the phone preview', () => {
     expect(showPage(INITIAL_DASH_STATE, 'trip')).toMatchObject({ page: 'trip', focus: 0 });
+    expect(showPage(INITIAL_DASH_STATE, 'music')).toMatchObject({ page: 'music', focus: 1 });
     // Ride page: its one item is the Map button.
     expect(tapItem(INITIAL_DASH_STATE, 0).page).toBe('map');
     // Map page: second item zooms out, and takes the focus ring with it.
     expect(tapItem(showPage(INITIAL_DASH_STATE, 'map'), 1)).toMatchObject({ zoom: 14, focus: 1 });
     expect(tapItem(INITIAL_DASH_STATE, 7)).toBe(INITIAL_DASH_STATE);
+  });
+
+  it('cycles the four colour themes and comes back', () => {
+    let state = INITIAL_DASH_STATE;
+    const seen = [state.theme];
+    for (let i = 0; i < 4; i++) seen.push((state = dashReducer(state, 'toggleTheme')).theme);
+    expect(seen).toEqual(['aurora', 'gray', 'graphite', 'day', 'aurora']);
+  });
+
+  it('turns music controls into numbered requests', () => {
+    // The Music page opens on play/pause.
+    const playing = run('pageNext', 'pageNext', 'select');
+    expect(playing).toMatchObject({ page: 'music', music: { id: 1, request: 'toggle' } });
+    expect(dashReducer(playing, 'focusNext').focus).toBe(2);
+    const skipped = dashReducer(dashReducer(playing, 'focusNext'), 'select');
+    expect(skipped.music).toEqual({ id: 2, request: 'next' });
+    // A handlebar button mapped to a music action works from any page.
+    expect(dashReducer(INITIAL_DASH_STATE, 'musicPrevious').music).toEqual({ id: 1, request: 'previous' });
   });
 
   it('clamps zoom', () => {

@@ -7,12 +7,13 @@ import { AppState } from 'react-native';
 import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DashAction, resolveAction } from '../buttons/mapping';
-import { DashPage, DashState, dashReducer, showPage, tapItem } from '../dash/controller';
+import { DashPage, DashState, DashTheme, dashReducer, setTheme, showPage, tapItem } from '../dash/controller';
 import { nativeTransport } from '../link/nativeTransport';
 import { PhoneSensorSource } from '../metrics/phoneSensors';
 import { TripComputer } from '../metrics/trip';
 import { DEFAULT_IDENTITY } from '../protocol/control';
 import { LinkSession, LinkState } from '../protocol/session';
+import { bootstrapSpotify, musicCommand, setMusicPageVisible } from '../spotify/session';
 import { bikeConnected, onBluetoothChange } from './autoStart';
 import { appendLog, getState, loadPersisted, saveSettings, setState } from './store';
 
@@ -52,6 +53,13 @@ function applyDash(change: (state: DashState) => DashState): void {
   if (after === before) return;
   setState({ dash: after });
   if (after.tripResetToken !== before.tripResetToken) setState({ metrics: trip.resetTrip() });
+  if (after.theme !== before.theme) saveSettings({ dashTheme: after.theme });
+  if (after.music && after.music.id !== before.music?.id) void musicCommand(after.music.request);
+  if (after.page !== before.page) setMusicPageVisible(after.page === 'music');
+}
+
+export function setDashTheme(theme: DashTheme): void {
+  applyDash((state) => setTheme(state, theme));
 }
 
 let pendingGesture: Gesture | null = null;
@@ -216,6 +224,7 @@ export async function bootstrap(): Promise<void> {
   });
   await applyButtonMode();
   applyMirrorView();
+  void bootstrapSpotify();
   void startMetrics();
   const { bike, settings } = getState();
   if (bike && settings.autoConnect) connect();

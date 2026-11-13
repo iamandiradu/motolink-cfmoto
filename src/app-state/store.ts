@@ -7,10 +7,11 @@ import { useSyncExternalStore } from 'react';
 
 import type { Gesture, RawButtonEvent } from '../buttons/gestures';
 import { ButtonLayout, DEFAULT_LAYOUT, normaliseLayout } from '../buttons/mapping';
-import { DashState, INITIAL_DASH_STATE } from '../dash/controller';
+import { DashState, DashTheme, INITIAL_DASH_STATE, THEMES } from '../dash/controller';
 import { EMPTY_METRICS, Metrics } from '../metrics/trip';
 import type { BikeCredentials } from '../protocol/qr';
 import type { SessionSnapshot } from '../protocol/session';
+import type { Playback } from '../spotify/api';
 
 export interface Settings {
   /** Connect by itself when the app opens and a bike is saved. */
@@ -25,6 +26,10 @@ export interface Settings {
   /** 0 for older dashes, 128 for newer ones. Change it if the dash connects but never shows a picture. */
   supportFunction: 0 | 128;
   units: 'metric' | 'imperial';
+  /** Colour theme of the dash picture. */
+  dashTheme: DashTheme;
+  /** Client ID of the rider's own Spotify developer app. Empty until entered. */
+  spotifyClientId: string;
   /** Bluetooth name of the bike, as iOS lists it. null until the rider picks it. */
   bikeBluetooth: string | null;
   /** Offer mirroring as soon as that Bluetooth device connects. */
@@ -64,6 +69,8 @@ export const DEFAULT_SETTINGS: Settings = {
   identityOs: 'Android',
   supportFunction: 0,
   units: 'metric',
+  dashTheme: 'aurora',
+  spotifyClientId: '',
   bikeBluetooth: null,
   autoStart: true,
   mirrorView: DEFAULT_MIRROR_VIEW,
@@ -85,6 +92,7 @@ export interface AppState {
   mirroring: boolean;
   /** Bluetooth audio devices the phone is connected to right now. */
   bluetoothOutputs: string[];
+  spotify: { connected: boolean; playback: Playback | null; error: string | null };
 }
 
 const IDLE_LINK: SessionSnapshot = {
@@ -108,6 +116,7 @@ let state: AppState = {
   lastButton: null,
   mirroring: false,
   bluetoothOutputs: [],
+  spotify: { connected: false, playback: null, error: null },
 };
 
 const listeners = new Set<() => void>();
@@ -160,11 +169,13 @@ function mergeSettings(stored: unknown): Settings {
     ...source,
     mirrorView: { ...DEFAULT_MIRROR_VIEW, ...(source.mirrorView ?? {}) },
     dismissedHints: Array.isArray(source.dismissedHints) ? source.dismissedHints : [],
+    dashTheme: THEMES.includes(source.dashTheme as DashTheme) ? (source.dashTheme as DashTheme) : DEFAULT_SETTINGS.dashTheme,
   };
 }
 
 export async function loadPersisted(): Promise<void> {
   const [bike, settings, layout] = await Promise.all([read(KEYS.bike), read(KEYS.settings), read(KEYS.layout)]);
+  const merged = mergeSettings(settings);
   const validBike =
     bike && typeof bike === 'object' && typeof (bike as BikeCredentials).ssid === 'string'
       ? (bike as BikeCredentials)
@@ -172,7 +183,8 @@ export async function loadPersisted(): Promise<void> {
   setState({
     loaded: true,
     bike: validBike,
-    settings: mergeSettings(settings),
+    settings: merged,
+    dash: { ...state.dash, theme: merged.dashTheme },
     layout: normaliseLayout(layout),
   });
 }

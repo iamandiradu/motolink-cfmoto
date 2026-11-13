@@ -5,12 +5,13 @@
  */
 import type { DashAction } from '../buttons/mapping';
 
-export const PAGES = ['ride', 'map', 'trip', 'menu'] as const;
+export const PAGES = ['ride', 'map', 'music', 'trip', 'menu'] as const;
 export type DashPage = (typeof PAGES)[number];
 
 export const PAGE_TITLES: Record<DashPage, string> = {
   ride: 'Ride',
   map: 'Map',
+  music: 'Music',
   trip: 'Trip',
   menu: 'Menu',
 };
@@ -19,11 +20,23 @@ export const PAGE_TITLES: Record<DashPage, string> = {
 export const PAGE_ITEMS: Record<DashPage, readonly string[]> = {
   ride: ['nextPage'],
   map: ['zoomIn', 'zoomOut', 'recenter'],
+  music: ['musicPrevious', 'musicPlayPause', 'musicNext'],
   trip: ['resetTrip'],
-  menu: ['ride', 'map', 'trip', 'theme'],
+  menu: ['ride', 'map', 'music', 'trip', 'theme'],
 };
 
-export type DashTheme = 'day' | 'night';
+/** Colour themes, after the CFMOTO liveries. */
+export const THEMES = ['aurora', 'gray', 'graphite', 'day'] as const;
+export type DashTheme = (typeof THEMES)[number];
+
+export const THEME_LABELS: Record<DashTheme, string> = {
+  aurora: 'Black, blue and pink',
+  gray: 'Gray',
+  graphite: 'Graphite',
+  day: 'Daylight',
+};
+
+export type MusicRequest = 'previous' | 'toggle' | 'next';
 
 export interface DashState {
   page: DashPage;
@@ -35,22 +48,26 @@ export interface DashState {
   following: boolean;
   /** Bumped when the trip must be cleared; the metrics store watches it. */
   tripResetToken: number;
+  /** Last music control asked for. A new `id` means "do it now". */
+  music: { id: number; request: MusicRequest } | null;
 }
 
 export const INITIAL_DASH_STATE: DashState = {
   page: 'ride',
   focus: 0,
-  theme: 'night',
+  theme: 'aurora',
   zoom: 15,
   following: true,
   tripResetToken: 0,
+  music: null,
 };
 
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 19;
 
 function goTo(state: DashState, page: DashPage): DashState {
-  return state.page === page ? state : { ...state, page, focus: 0 };
+  // The Music page opens on play/pause, its most used control.
+  return state.page === page ? state : { ...state, page, focus: page === 'music' ? 1 : 0 };
 }
 
 function shiftPage(state: DashState, step: number): DashState {
@@ -68,8 +85,12 @@ function zoom(state: DashState, step: number): DashState {
   return { ...state, zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom + step)) };
 }
 
-function toggleTheme(state: DashState): DashState {
-  return { ...state, theme: state.theme === 'day' ? 'night' : 'day' };
+function nextTheme(state: DashState): DashState {
+  return { ...state, theme: THEMES[(THEMES.indexOf(state.theme) + 1) % THEMES.length] };
+}
+
+function music(state: DashState, request: MusicRequest): DashState {
+  return { ...state, music: { id: (state.music?.id ?? 0) + 1, request } };
 }
 
 function activate(state: DashState): DashState {
@@ -85,12 +106,19 @@ function activate(state: DashState): DashState {
       return { ...state, following: true };
     case 'resetTrip':
       return { ...state, tripResetToken: state.tripResetToken + 1 };
+    case 'musicPrevious':
+      return music(state, 'previous');
+    case 'musicPlayPause':
+      return music(state, 'toggle');
+    case 'musicNext':
+      return music(state, 'next');
     case 'ride':
     case 'map':
+    case 'music':
     case 'trip':
       return goTo(state, item);
     case 'theme':
-      return toggleTheme(state);
+      return nextTheme(state);
     default:
       return state;
   }
@@ -105,6 +133,10 @@ export function showPage(state: DashState, page: DashPage): DashState {
 export function tapItem(state: DashState, index: number): DashState {
   if (index < 0 || index >= PAGE_ITEMS[state.page].length) return state;
   return activate({ ...state, focus: index });
+}
+
+export function setTheme(state: DashState, theme: DashTheme): DashState {
+  return state.theme === theme ? state : { ...state, theme };
 }
 
 export function dashReducer(state: DashState, action: DashAction): DashState {
@@ -128,9 +160,15 @@ export function dashReducer(state: DashState, action: DashAction): DashState {
     case 'zoomOut':
       return zoom(state, -1);
     case 'toggleTheme':
-      return toggleTheme(state);
+      return nextTheme(state);
     case 'resetTrip':
       return { ...state, tripResetToken: state.tripResetToken + 1 };
+    case 'musicNext':
+      return music(state, 'next');
+    case 'musicPrevious':
+      return music(state, 'previous');
+    case 'musicPlayPause':
+      return music(state, 'toggle');
     case 'none':
     default:
       return state;
