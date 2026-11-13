@@ -68,7 +68,6 @@ jobs:
       - name: Collect APKs
         run: |
           mkdir -p "$RUNNER_TEMP/apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apk/MotoLink-${{ github.run_number }}-debug.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/MotoLink-${{ github.run_number }}-release.apk"
           ls -lh "$RUNNER_TEMP/apk"
 
