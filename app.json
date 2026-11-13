@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "MotoLink",
+    "slug": "motolink",
+    "scheme": "motolink",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.iamandiradu.motolink",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "MotoLink talks to the motorcycle dash over its Wi-Fi network.",
+        "NSLocationWhenInUseUsageDescription": "MotoLink uses your location for speed, heading, trip distance and the map on the dash.",
+        "NSMotionUsageDescription": "MotoLink uses motion sensors to show lean angle.",
+        "NSCameraUsageDescription": "MotoLink uses the camera to scan the pairing QR code on the dash.",
+        "UIBackgroundModes": ["audio", "location"],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.networking.HotspotConfiguration": true
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MotoLink uses the camera to scan the pairing QR code on the dash.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "MotoLink uses your location for speed, heading, trip distance and the map on the dash."
+        }
+      ]
+    ]
+  }
+}
