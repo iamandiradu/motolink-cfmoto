@@ -1,0 +1,72 @@
+name: Build APK
+
+# Builds the Android app on every merge to master. This is also the only
+# compile check of the Kotlin native module (modules/moto-link/android).
+#
+# Two APKs come out:
+#   MotoLink-debug.apk    assembleDebug. Loads JavaScript from Metro
+#                         (npx expo start), so it is for development only.
+#   MotoLink-release.apk  assembleRelease with the JS bundle inside. The Expo
+#                         template signs release builds with the debug key, so
+#                         it installs directly (adb install / open the file).
+#
+# Toolchain: React Native 0.88 uses Android Gradle Plugin 9.2 and Gradle 9.4,
+# which need JDK 17 or newer; compileSdk 37, minSdk 24.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: npm ci
+
+      - name: Accept Android SDK licenses
+        # Lets Gradle download the compileSdk, build-tools and NDK versions
+        # React Native asks for when the runner image does not have them yet.
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build APKs
+        working-directory: android
+        run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/apk/MotoLink-${{ github.run_number }}-debug.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/MotoLink-${{ github.run_number }}-release.apk"
+          ls -lh "$RUNNER_TEMP/apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ${{ runner.temp }}/apk/*.apk
+          if-no-files-found: error

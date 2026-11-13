@@ -2,7 +2,7 @@
  * Wires the pieces together: link session, handlebar buttons, dash UI state
  * and metrics. Module-level singletons; the bike has one dash.
  */
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
@@ -224,6 +224,9 @@ async function connectAsync(): Promise<void> {
     settings.supportFunction === 'auto' ? (overrides?.identity.supportFunction ?? 0) : settings.supportFunction;
   const identity = {
     ...DEFAULT_IDENTITY,
+    // Brand and model are informational; keep them true to the phone in hand.
+    phoneBrand: Platform.OS === 'android' ? 'Android' : 'Apple',
+    phoneModel: Platform.OS === 'android' ? 'Android phone' : 'iPhone',
     phoneOs: settings.identityOs,
     phoneType: settings.identityOs,
     supportFunction,
@@ -290,7 +293,8 @@ function syncMirrorStrip(): void {
   });
   if (sameStrip(lastStrip, strip)) return;
   lastStrip = strip;
-  MotoLink.setMirrorStrip(strip);
+  // Not on Android yet: the strip and the lock-screen activity are iOS features so far.
+  if (Platform.OS === 'ios') MotoLink.setMirrorStrip(strip);
 }
 
 export function setMirrorStrip(edge: StripEdge): void {
@@ -307,10 +311,11 @@ let activityShown = false;
 function syncLiveActivity(): void {
   const state = getState();
   if (!shouldShowActivity(state.link.state, state.mirroring)) {
-    if (activityShown) MotoLink.endLiveActivity();
+    if (activityShown && Platform.OS === 'ios') MotoLink.endLiveActivity();
     activityShown = false;
     return;
   }
+  if (Platform.OS !== 'ios') return;
   activityShown =
     MotoLink.updateLiveActivity(
       activityState({

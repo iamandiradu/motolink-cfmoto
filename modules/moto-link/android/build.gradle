@@ -1,0 +1,26 @@
+// Local Expo module, same conventions as the SDK 58 packages in node_modules
+// (e.g. expo-clipboard): the expo-module-gradle-plugin supplies compileSdk,
+// minSdk, Kotlin and the expo-modules-core dependency.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.motolink'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.motolink"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+  lint {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // NotificationCompat, ServiceCompat, ContextCompat, IntentCompat.
+  implementation "androidx.core:core-ktx:1.17.0"
+}

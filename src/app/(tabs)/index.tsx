@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   changeMirrorPreset,
@@ -11,7 +11,9 @@ import {
   toggleMirroring,
 } from '../../app-state/controller';
 import { dismissHint, saveBike, useAppState } from '../../app-state/store';
-import { DEFAULT_MIRROR_VIEW, MirrorView, PRESET_APPS, PresetApp, isDefaultView } from '../../mirror/presets';
+import { DEFAULT_MIRROR_VIEW, MirrorView, PresetApp, isDefaultView, presetApps } from '../../mirror/presets';
+
+const PRESET_APPS = presetApps(Platform.OS);
 import { WifiHelper } from '../../onboarding/WifiHelper';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
@@ -131,7 +133,7 @@ function MirrorCard({ mirroring }: { mirroring: boolean }) {
       <Body dim>
         {mirroring
           ? 'The dash shows whatever is on this phone. Open a navigation app and turn the phone sideways so the map fills the dash.'
-          : 'Works with any app: Apple Maps, Google Maps, Waze, Spotify. Tap Start, choose MotoLink, then Start Broadcast.'}
+          : 'Works with any app: Apple Maps, Google Maps, Waze, Spotify. Tap Start, then confirm when the phone asks.'}
       </Body>
       <Button
         label={mirroring ? 'Stop mirroring' : 'Start mirroring'}

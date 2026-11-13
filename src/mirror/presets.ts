@@ -35,12 +35,18 @@ export interface PresetApp {
   url: string | null;
 }
 
-export const PRESET_APPS: readonly PresetApp[] = [
-  { id: 'general', label: 'Any app', url: null },
-  { id: 'appleMaps', label: 'Apple Maps', url: 'maps://' },
-  { id: 'googleMaps', label: 'Google Maps', url: 'comgooglemaps://' },
-  { id: 'waze', label: 'Waze', url: 'waze://' },
-];
+/** iOS URL schemes. On Android, web links open the installed app; Apple Maps does not exist there. */
+export function presetApps(platform: string): readonly PresetApp[] {
+  const android = platform === 'android';
+  return [
+    { id: 'general', label: 'Any app', url: null },
+    ...(android ? [] : [{ id: 'appleMaps' as const, label: 'Apple Maps', url: 'maps://' }]),
+    { id: 'googleMaps', label: 'Google Maps', url: android ? 'https://www.google.com/maps' : 'comgooglemaps://' },
+    { id: 'waze', label: 'Waze', url: android ? 'https://waze.com/ul' : 'waze://' },
+  ];
+}
+
+export const PRESET_APPS: readonly PresetApp[] = presetApps('ios');
 
 export type MirrorPresets = Record<PresetId, MirrorView>;
 

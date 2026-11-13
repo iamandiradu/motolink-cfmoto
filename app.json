@@ -39,6 +39,15 @@
         }
       ],
       "@bacons/apple-targets"
-    ]
+    ],
+    "android": {
+      "package": "com.iamandiradu.motolink",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ]
+    }
   }
 }

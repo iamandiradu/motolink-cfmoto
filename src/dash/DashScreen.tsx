@@ -4,7 +4,7 @@
  * type, high contrast. No touch; a focus ring shows what Select will do.
  */
 import { ReactNode, useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
 
 import { tapDashItem, tapDashPage } from '../app-state/controller';
@@ -173,7 +173,10 @@ function MapPage({ metrics, dash, palette }: PageProps) {
   return (
     <View style={styles.row}>
       <View style={[styles.mapFrame, { backgroundColor: palette.panel }]}>
-        {hasFix ? (
+        {Platform.OS === 'android' ? (
+          // The Android map needs a Google Maps key and cannot be captured for the dash yet.
+          <Text style={[styles.placeholder, { color: palette.dim }]}>Map: mirror a maps app instead</Text>
+        ) : hasFix ? (
           <MapView
             style={StyleSheet.absoluteFill}
             userInterfaceStyle={dash.theme === 'day' ? 'light' : 'dark'}
