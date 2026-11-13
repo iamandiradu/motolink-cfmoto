@@ -8,6 +8,8 @@
  * endpoints) a Premium account.
  */
 
+import { t } from '../i18n';
+
 export const REDIRECT_URI = 'motolink://spotify';
 export const SCOPES = ['user-read-playback-state', 'user-modify-playback-state', 'user-read-currently-playing'];
 
@@ -97,7 +99,7 @@ function readTokens(json: unknown, now: number, previousRefresh?: string): Token
   // A refresh reply may omit the refresh token; the old one then stays valid.
   const refreshToken = typeof data.refresh_token === 'string' ? data.refresh_token : (previousRefresh ?? '');
   const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 3600;
-  if (!accessToken || !refreshToken) throw new SpotifyError('Spotify sent no token', 0);
+  if (!accessToken || !refreshToken) throw new SpotifyError(t('spotify.noToken'), 0);
   // Renew a minute early so a request never goes out with a token about to lapse.
   return { accessToken, refreshToken, expiresAt: now + (expiresIn - 60) * 1000 };
 }
@@ -108,7 +110,7 @@ async function tokenRequest(fetch: Fetch, body: Record<string, string>, now: num
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form(body),
   });
-  if (!response.ok) throw new SpotifyError(`Spotify sign-in failed (${response.status})`, response.status);
+  if (!response.ok) throw new SpotifyError(t('spotify.signInFailed', { status: response.status }), response.status);
   return readTokens(await response.json(), now, previousRefresh);
 }
 
@@ -152,7 +154,7 @@ export async function getPlayback(fetch: Fetch, accessToken: string, now = Date.
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (response.status === 204) return null;
-  if (!response.ok) throw new SpotifyError(`Spotify playback failed (${response.status})`, response.status);
+  if (!response.ok) throw new SpotifyError(t('spotify.playbackFailed', { status: response.status }), response.status);
   return parsePlayback(await response.json(), now);
 }
 
@@ -163,13 +165,13 @@ const COMMANDS: Record<MusicCommand, { method: string; path: string }> = {
   previous: { method: 'POST', path: '/me/player/previous' },
 };
 
-/** Why a command was refused, in words for the rider. */
+/** Why a command was refused, in words for the rider (in the current app language). */
 export function explainFailure(status: number): string {
-  if (status === 401) return 'Spotify sign-in expired. Connect again in Settings.';
-  if (status === 403) return 'Spotify refused. Controls need a Premium account.';
-  if (status === 404) return 'Nothing is playing. Start a song in Spotify first.';
-  if (status === 429) return 'Spotify is rate limiting. Try again in a moment.';
-  return `Spotify error ${status}.`;
+  if (status === 401) return t('spotify.expired');
+  if (status === 403) return t('spotify.refused');
+  if (status === 404) return t('spotify.nothingPlaying');
+  if (status === 429) return t('spotify.rateLimited');
+  return t('spotify.error', { status });
 }
 
 export async function sendCommand(fetch: Fetch, accessToken: string, command: MusicCommand): Promise<void> {

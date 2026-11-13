@@ -9,10 +9,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { BackHandler, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
+import { useT } from '../i18n';
 import { formatDuration } from '../metrics/trip';
 import { Body, Card, Row, colors } from '../ui/kit';
-import { formatClimb, formatDistance, formatSpeed } from './format';
-import { defaultRideName } from './gpx';
+import { formatClimb, formatDistance, formatSpeed, rideDate, rideName } from './format';
 import type { RidePoint, RideSummary } from './recorder';
 import { loadRide } from './storage';
 import { regionForTrack, speedBands } from './track';
@@ -29,8 +29,9 @@ export interface RideDetailProps {
 type TrackState = { status: 'loading' } | { status: 'ready'; points: RidePoint[] } | { status: 'error' };
 
 export function RideDetail({ ride, imperial = false, exporting = false, onBack, onExport, onDelete }: RideDetailProps) {
+  const t = useT();
   const [track, setTrack] = useState<TrackState>({ status: 'loading' });
-  const name = defaultRideName(ride.startedAt);
+  const name = rideName(ride.startedAt);
 
   useEffect(() => {
     let live = true;
@@ -56,30 +57,30 @@ export function RideDetail({ ride, imperial = false, exporting = false, onBack, 
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Back to saved rides"
+        accessibilityLabel={t('rideDetail.backA11y')}
         onPress={onBack}
         hitSlop={8}
         style={({ pressed }) => [styles.back, pressed && { opacity: 0.6 }]}>
-        <Text style={styles.backLabel}>‹ Saved rides</Text>
+        <Text style={styles.backLabel}>{t('rideDetail.back')}</Text>
       </Pressable>
 
-      <Card title={name.replace(/^Ride /, '')}>
-        <Row label="Date" value={new Date(ride.startedAt).toLocaleString()} />
-        <Row label="Distance" value={formatDistance(ride.distanceM, imperial)} />
-        <Row label="Riding time" value={formatDuration(ride.movingSeconds)} />
-        <Row label="Total time" value={formatDuration(ride.totalSeconds)} />
-        <Row label="Average speed" value={formatSpeed(ride.avgSpeedKmh, imperial)} />
-        <Row label="Top speed" value={formatSpeed(ride.maxSpeedKmh, imperial)} />
-        {ride.elevationGainM > 0 ? <Row label="Climb" value={formatClimb(ride.elevationGainM, imperial)} /> : null}
+      <Card title={rideDate(ride.startedAt)}>
+        <Row label={t('rideDetail.date')} value={new Date(ride.startedAt).toLocaleString()} />
+        <Row label={t('rides.distance')} value={formatDistance(ride.distanceM, imperial)} />
+        <Row label={t('rides.ridingTime')} value={formatDuration(ride.movingSeconds)} />
+        <Row label={t('rideDetail.totalTime')} value={formatDuration(ride.totalSeconds)} />
+        <Row label={t('rideDetail.avgSpeed')} value={formatSpeed(ride.avgSpeedKmh, imperial)} />
+        <Row label={t('rides.topSpeed')} value={formatSpeed(ride.maxSpeedKmh, imperial)} />
+        {ride.elevationGainM > 0 ? <Row label={t('rideDetail.climb')} value={formatClimb(ride.elevationGainM, imperial)} /> : null}
       </Card>
 
-      <Card title="Track">
+      <Card title={t('rideDetail.track')}>
         {Platform.OS === 'android' ? (
-          <Body dim>The map is not available on Android yet. Export the GPX to see the track in another app.</Body>
+          <Body dim>{t('rideDetail.androidMap')}</Body>
         ) : track.status === 'loading' ? (
-          <Body dim>Loading the track…</Body>
+          <Body dim>{t('rideDetail.loading')}</Body>
         ) : track.status === 'error' ? (
-          <Body dim>This ride&apos;s track could not be read.</Body>
+          <Body dim>{t('rideDetail.trackError')}</Body>
         ) : (
           <TrackMap points={track.points} imperial={imperial} name={name} />
         )}
@@ -87,21 +88,23 @@ export function RideDetail({ ride, imperial = false, exporting = false, onBack, 
 
       <View style={styles.actions}>
         <Action
-          label={exporting ? 'Exporting…' : 'Export GPX'}
-          a11y={`Export ${name} as GPX`}
+          label={exporting ? t('rides.exporting') : t('rides.exportGpx')}
+          a11y={t('rides.exportA11y', { name })}
           disabled={exporting}
           onPress={onExport}
         />
-        <Action label="Delete" a11y={`Delete ${name}`} danger onPress={onDelete} />
+        <Action label={t('common.delete')} a11y={t('rides.deleteA11y', { name })} danger onPress={onDelete} />
       </View>
     </>
   );
 }
 
 function TrackMap({ points, imperial, name }: { points: RidePoint[]; imperial: boolean; name: string }) {
+  const t = useT();
   const region = useMemo(() => regionForTrack(points), [points]);
-  const { segments, legend } = useMemo(() => speedBands(points, { imperial }), [points, imperial]);
-  if (!region || points.length === 0) return <Body dim>This ride has no track to show.</Body>;
+  // The language is a dependency: the legend labels are built in it.
+  const { segments, legend } = useMemo(() => speedBands(points, { imperial }), [points, imperial, t]);
+  if (!region || points.length === 0) return <Body dim>{t('rideDetail.noTrack')}</Body>;
   const first = points[0];
   const last = points[points.length - 1];
   const usedBands = new Set(segments.map((s) => s.band));
@@ -112,7 +115,7 @@ function TrackMap({ points, imperial, name }: { points: RidePoint[]; imperial: b
         style={styles.mapFrame}
         accessible
         accessibilityRole="image"
-        accessibilityLabel={`Map of ${name}, coloured by speed. The summary above has the numbers.`}>
+        accessibilityLabel={t('rideDetail.mapA11y', { name })}>
         <MapView
           style={StyleSheet.absoluteFill}
           initialRegion={region}
@@ -131,25 +134,25 @@ function TrackMap({ points, imperial, name }: { points: RidePoint[]; imperial: b
               lineJoin="round"
             />
           ))}
-          <Marker coordinate={{ latitude: first.lat, longitude: first.lon }} title="Start" anchor={{ x: 0.5, y: 0.5 }}>
-            <Pin text="Start" color={colors.ok} />
+          <Marker coordinate={{ latitude: first.lat, longitude: first.lon }} title={t('rideDetail.start')} anchor={{ x: 0.5, y: 0.5 }}>
+            <Pin text={t('rideDetail.start')} color={colors.ok} />
           </Marker>
           {points.length > 1 ? (
-            <Marker coordinate={{ latitude: last.lat, longitude: last.lon }} title="End" anchor={{ x: 0.5, y: 0.5 }}>
-              <Pin text="End" color={colors.danger} />
+            <Marker coordinate={{ latitude: last.lat, longitude: last.lon }} title={t('rideDetail.end')} anchor={{ x: 0.5, y: 0.5 }}>
+              <Pin text={t('rideDetail.end')} color={colors.danger} />
             </Marker>
           ) : null}
         </MapView>
       </View>
 
-      <Text style={styles.legendTitle}>Speed</Text>
+      <Text style={styles.legendTitle}>{t('rideDetail.speed')}</Text>
       <View style={styles.legend}>
         {legend.map((b) => (
           <View
             key={b.index}
             style={styles.legendItem}
             accessible
-            accessibilityLabel={`${b.label}${usedBands.has(b.index) ? '' : ', not reached on this ride'}`}>
+            accessibilityLabel={usedBands.has(b.index) ? b.label : t('rideDetail.notReached', { band: b.label })}>
             <View style={[styles.swatch, { backgroundColor: b.color }]} />
             <Text style={[styles.legendLabel, !usedBands.has(b.index) && { color: colors.dim }]}>{b.label}</Text>
           </View>

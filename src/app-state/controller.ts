@@ -8,6 +8,7 @@ import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DashAction, resolveAction } from '../buttons/mapping';
 import { DashPage, DashState, DashTheme, THEMES, dashReducer, setTheme, showPage, tapItem } from '../dash/controller';
+import { t } from '../i18n';
 import { nativeTransport } from '../link/nativeTransport';
 import { AlertTracker, ComfortSettings, EMPTY_FUEL, pickStripAlert, refuel, themeForTime, trackTrip } from '../comfort';
 import { watchBattery } from '../comfort/battery';
@@ -390,7 +391,7 @@ export function markRefuelled(): void {
 }
 
 export function testVoice(): void {
-  say('Voice announcements are on.', { enabled: true });
+  say(t('comfort.voiceSample'), { enabled: true });
 }
 
 let activityShown = false;
@@ -443,7 +444,7 @@ function onBluetoothOutputs(current: string[]): void {
       toggleMirroring();
     } else {
       pickerDue = true;
-      void MotoLink.notify('Bike connected', 'Tap to put your phone screen on the dash.').catch(() => undefined);
+      void MotoLink.notify(t('notify.bikeTitle'), t('notify.bikeBody')).catch(() => undefined);
     }
   }
 }

@@ -6,9 +6,11 @@ import { StyleSheet, View } from 'react-native';
 import { connect } from '../app-state/controller';
 import { saveBike } from '../app-state/store';
 import { parsePairingQr } from '../protocol/qr';
+import { useT } from '../i18n';
 import { Body, Button, Card, colors } from '../ui/kit';
 
 export default function ScanScreen() {
+  const t = useT();
   const [permission, requestPermission] = useCameraPermissions();
   const [wrongCode, setWrongCode] = useState(false);
   const done = useRef(false);
@@ -16,9 +18,9 @@ export default function ScanScreen() {
   if (!permission?.granted) {
     return (
       <View style={styles.container}>
-        <Card title="Camera access">
-          <Body>The camera reads the QR code on the dash. Nothing is recorded.</Body>
-          <Button label="Allow camera" onPress={() => void requestPermission()} />
+        <Card title={t('scan.cameraTitle')}>
+          <Body>{t('scan.cameraBody')}</Body>
+          <Button label={t('scan.allowCamera')} onPress={() => void requestPermission()} />
         </Card>
       </View>
     );
@@ -45,9 +47,7 @@ export default function ScanScreen() {
       />
       <Card>
         <Body dim>
-          {wrongCode
-            ? 'That is a different QR code. Point at the one on the MotoPlay phone connection screen.'
-            : 'Point the camera at the QR code on the dash.'}
+          {wrongCode ? t('scan.wrongCode') : t('scan.pointAt')}
         </Body>
       </Card>
     </View>

@@ -2,20 +2,16 @@
  * First-run onboarding: step order and the pure rules that drive it.
  * No React here, so the logic can be tested on its own.
  */
+import { t } from '../i18n';
 import type { LinkState } from '../protocol/session';
 
 export const STEP_IDS = ['about', 'bluetooth', 'closeApp', 'scan', 'wifi', 'mirror', 'done'] as const;
 export type StepId = (typeof STEP_IDS)[number];
 
-export const STEP_TITLES: Record<StepId, string> = {
-  about: 'What MotoLink does',
-  bluetooth: 'Pair Bluetooth',
-  closeApp: 'Close the CFMOTO app',
-  scan: 'Scan the dash QR',
-  wifi: 'Join the dash Wi-Fi',
-  mirror: 'Start mirroring',
-  done: 'Handlebar buttons',
-};
+/** Step heading in the current language; read at render time so it follows a change. */
+export function stepTitle(step: StepId): string {
+  return t(`onboarding.steps.${step}`);
+}
 
 /** What the flow knows about the outside world. */
 export interface OnboardingState {
@@ -53,7 +49,7 @@ export function prevStep(step: StepId): StepId | null {
 
 /** "Step 3 of 7". */
 export function progressLabel(step: StepId): string {
-  return `Step ${stepIndex(step) + 1} of ${STEP_COUNT}`;
+  return t('onboarding.progress', { n: stepIndex(step) + 1, total: STEP_COUNT });
 }
 
 /** True once the phone has reached the dash network (every state past searching). */

@@ -7,9 +7,12 @@
  * out short drop-outs and keeps voice from repeating itself.
  *
  * Texts are for a rider with the phone in a pocket: they never ask the rider
- * to look at the phone.
+ * to look at the phone. They are built in the current app language each time
+ * the alerts are evaluated; `short` stays within 18 characters in every
+ * language (checked by the i18n tests).
  */
 
+import { t } from '../i18n';
 import type { Metrics } from '../metrics/trip';
 import type { GloveMode } from './glove';
 
@@ -136,9 +139,9 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
   const imperial = input.imperial ?? false;
   const factor = imperial ? KM_TO_MI : 1;
   const speedUnit = imperial ? 'mph' : 'km/h';
-  const speedWords = imperial ? 'miles per hour' : 'kilometres per hour';
+  const speedWords = imperial ? t('alerts.mphWords') : t('alerts.kmhWords');
   const distUnit = imperial ? 'mi' : 'km';
-  const distWords = imperial ? 'miles' : 'kilometres';
+  const distWords = imperial ? t('alerts.miWords') : t('alerts.kmWords');
   const riding = input.riding ?? (metrics.speedKmh ?? 0) >= RIDING_SPEED_KMH;
   const alerts: ComfortAlert[] = [];
 
@@ -152,8 +155,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'speed',
         severity: 'warn',
-        short: `Over ${shown} ${speedUnit}`,
-        spoken: `You are over ${shown} ${speedWords}.`,
+        short: t('alerts.speedShort', { speed: shown, unit: speedUnit }),
+        spoken: t('alerts.speedSpoken', { speed: shown, unitWords: speedWords }),
         dashFlash: true,
       });
     }
@@ -167,8 +170,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'fuel',
         severity: 'urgent',
-        short: 'Refuel now',
-        spoken: 'Fuel reminder. You have ridden your full range. Refuel soon.',
+        short: t('alerts.fuelEmptyShort'),
+        spoken: t('alerts.fuelEmptySpoken'),
         dashFlash: true,
       });
     } else if (used >= 0.8) {
@@ -176,8 +179,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'fuel',
         severity: 'warn',
-        short: `Fuel ${left} ${distUnit} left`,
-        spoken: `Fuel reminder. About ${left} ${distWords} left.`,
+        short: t('alerts.fuelLowShort', { left, unit: distUnit }),
+        spoken: t('alerts.fuelLowSpoken', { left, unitWords: distWords }),
         dashFlash: false,
       });
     }
@@ -193,10 +196,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'battery',
         severity: urgent ? 'urgent' : 'warn',
-        short: `Phone battery ${pct}%`,
-        spoken: urgent
-          ? `Phone battery is at ${pct} percent. Charge it at your next stop.`
-          : `Phone battery is at ${pct} percent.`,
+        short: t('alerts.batteryShort', { pct }),
+        spoken: urgent ? t('alerts.batteryUrgentSpoken', { pct }) : t('alerts.batterySpoken', { pct }),
         dashFlash: urgent,
       });
     }
@@ -209,10 +210,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
     alerts.push({
       id: 'thermal',
       severity: critical ? 'urgent' : 'warn',
-      short: 'Phone is hot',
-      spoken: critical
-        ? 'The phone is very hot. Mirroring may stop.'
-        : 'The phone is getting hot. Mirroring may slow down.',
+      short: t('alerts.hotShort'),
+      spoken: critical ? t('alerts.hotCriticalSpoken') : t('alerts.hotSpoken'),
       dashFlash: critical,
     });
   }
@@ -227,8 +226,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'gps',
         severity: 'warn',
-        short: 'GPS lost',
-        spoken: 'GPS signal lost. Speed and trip are paused.',
+        short: t('alerts.gpsShort'),
+        spoken: t('alerts.gpsSpoken'),
         dashFlash: false,
       });
     }
@@ -239,8 +238,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'link',
         severity: 'urgent',
-        short: 'Dash link lost',
-        spoken: 'Dash connection lost.',
+        short: t('alerts.linkShort'),
+        spoken: t('alerts.linkSpoken'),
         dashFlash: false,
       });
     }
@@ -250,8 +249,8 @@ export function evaluateAlerts(input: AlertInput): ComfortAlert[] {
       alerts.push({
         id: 'mirroring',
         severity: 'warn',
-        short: 'Mirroring stopped',
-        spoken: 'Screen mirroring stopped.',
+        short: t('alerts.mirroringShort'),
+        spoken: t('alerts.mirroringSpoken'),
         dashFlash: true,
       });
     }

@@ -4,17 +4,15 @@
  * buttons. Pure reducer; the React layer renders it.
  */
 import type { DashAction } from '../buttons/mapping';
+import { t } from '../i18n';
 
 export const PAGES = ['ride', 'map', 'music', 'trip', 'menu'] as const;
 export type DashPage = (typeof PAGES)[number];
 
-export const PAGE_TITLES: Record<DashPage, string> = {
-  ride: 'Ride',
-  map: 'Map',
-  music: 'Music',
-  trip: 'Trip',
-  menu: 'Menu',
-};
+/** Tab title of a page in the current language; read at render time so it follows a change. */
+export function pageTitle(page: DashPage): string {
+  return t(`dash.pages.${page}`);
+}
 
 /** Focusable items per page, in focus order. */
 export const PAGE_ITEMS: Record<DashPage, readonly string[]> = {
@@ -29,13 +27,9 @@ export const PAGE_ITEMS: Record<DashPage, readonly string[]> = {
 export const THEMES = ['aurora', 'gray', 'graphite', 'neon', 'day'] as const;
 export type DashTheme = (typeof THEMES)[number];
 
-export const THEME_LABELS: Record<DashTheme, string> = {
-  aurora: 'Black, blue and pink',
-  gray: 'Gray',
-  graphite: 'Graphite',
-  neon: 'Neon green',
-  day: 'Daylight',
-};
+export function themeLabel(theme: DashTheme): string {
+  return t(`dash.themes.${theme}`);
+}
 
 export type MusicRequest = 'previous' | 'toggle' | 'next';
 

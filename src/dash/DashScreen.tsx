@@ -10,8 +10,9 @@ import MapView from 'react-native-maps';
 import { tapDashItem, tapDashPage } from '../app-state/controller';
 import { useAppState } from '../app-state/store';
 import { Metrics, compassPoint, formatClock, formatDuration, gpsQuality } from '../metrics/trip';
+import { useT } from '../i18n';
 import { currentProgressMs, formatTrackTime } from '../spotify/api';
-import { DashPage, DashState, DashTheme, PAGES, PAGE_ITEMS, PAGE_TITLES, THEME_LABELS } from './controller';
+import { DashPage, DashState, DashTheme, PAGES, PAGE_ITEMS, pageTitle, themeLabel } from './controller';
 
 interface Palette {
   bg: string;
@@ -133,6 +134,7 @@ function Stat(props: { label: string; value: string; unit?: string; palette: Pal
 }
 
 function RidePage({ metrics, dash, palette }: PageProps) {
+  const t = useT();
   const units = useUnits();
   const clock = useClock();
   return (
@@ -145,30 +147,30 @@ function RidePage({ metrics, dash, palette }: PageProps) {
           <Text style={[styles.speed, { color: palette.text }]}>{units.speed(metrics.speedKmh)}</Text>
         )}
         <Text style={[styles.speedUnit, { color: gpsQuality(metrics.accuracyM) === 'good' ? palette.dim : palette.warn }]}>
-          {gpsQuality(metrics.accuracyM) === 'good' ? units.speedUnit : gpsQuality(metrics.accuracyM) === 'poor' ? 'weak GPS' : 'no GPS'}
+          {gpsQuality(metrics.accuracyM) === 'good' ? units.speedUnit : gpsQuality(metrics.accuracyM) === 'poor' ? t('dash.weakGps') : t('dash.noGps')}
         </Text>
       </View>
       <View style={styles.column}>
         <View style={styles.row}>
           <Stat
-            label="HEADING"
+            label={t('dash.heading')}
             value={metrics.headingDeg === null ? '--' : compassPoint(metrics.headingDeg)}
             unit={metrics.headingDeg === null ? undefined : `${Math.round(metrics.headingDeg)}°`}
             palette={palette}
           />
-          <Stat label="TIME" value={clock} palette={palette} />
+          <Stat label={t('dash.time')} value={clock} palette={palette} />
         </View>
         <View style={styles.row}>
-          <Stat label="TRIP" value={units.distance(metrics.tripKm)} unit={units.distanceUnit} palette={palette} />
+          <Stat label={t('dash.trip')} value={units.distance(metrics.tripKm)} unit={units.distanceUnit} palette={palette} />
           <Stat
-            label="ALTITUDE"
+            label={t('dash.altitude')}
             value={metrics.altitudeM === null ? '--' : String(Math.round(metrics.altitudeM))}
             unit="m"
             palette={palette}
           />
         </View>
         <Focusable index={0} focus={dash.focus} palette={palette}>
-          <Text style={[styles.button, { color: palette.text }]}>Map ›</Text>
+          <Text style={[styles.button, { color: palette.text }]}>{t('dash.mapButton')}</Text>
         </Focusable>
       </View>
     </View>
@@ -176,6 +178,7 @@ function RidePage({ metrics, dash, palette }: PageProps) {
 }
 
 function MapPage({ metrics, dash, palette }: PageProps) {
+  const t = useT();
   const units = useUnits();
   const hasFix = metrics.latitude !== null && metrics.longitude !== null;
   const items = PAGE_ITEMS.map;
@@ -185,7 +188,7 @@ function MapPage({ metrics, dash, palette }: PageProps) {
       <View style={[styles.mapFrame, { backgroundColor: palette.panel }]}>
         {Platform.OS === 'android' ? (
           // The Android map needs a Google Maps key and cannot be captured for the dash yet.
-          <Text style={[styles.placeholder, { color: palette.dim }]}>Map: mirror a maps app instead</Text>
+          <Text style={[styles.placeholder, { color: palette.dim }]}>{t('dash.mapAndroid')}</Text>
         ) : hasFix ? (
           <MapView
             style={StyleSheet.absoluteFill}
@@ -207,7 +210,7 @@ function MapPage({ metrics, dash, palette }: PageProps) {
             }}
           />
         ) : (
-          <Text style={[styles.placeholder, { color: palette.dim }]}>Waiting for GPS</Text>
+          <Text style={[styles.placeholder, { color: palette.dim }]}>{t('dash.waitingGps')}</Text>
         )}
         <View style={[styles.mapSpeed, { backgroundColor: palette.bg }]}>
           <Text style={[styles.mapSpeedValue, { color: palette.text }]}>{units.speed(metrics.speedKmh)}</Text>
@@ -226,19 +229,20 @@ function MapPage({ metrics, dash, palette }: PageProps) {
 }
 
 function TripPage({ metrics, dash, palette }: PageProps) {
+  const t = useT();
   const units = useUnits();
   return (
     <View style={styles.column}>
       <View style={styles.row}>
-        <Stat label="DISTANCE" value={units.distance(metrics.tripKm)} unit={units.distanceUnit} palette={palette} big />
-        <Stat label="RIDING TIME" value={formatDuration(metrics.movingSeconds)} palette={palette} big />
+        <Stat label={t('dash.distance')} value={units.distance(metrics.tripKm)} unit={units.distanceUnit} palette={palette} big />
+        <Stat label={t('dash.ridingTime')} value={formatDuration(metrics.movingSeconds)} palette={palette} big />
       </View>
       <View style={styles.row}>
-        <Stat label="AVERAGE" value={units.speed(metrics.avgSpeedKmh)} unit={units.speedUnit} palette={palette} />
-        <Stat label="TOP" value={units.speed(metrics.maxSpeedKmh)} unit={units.speedUnit} palette={palette} />
-        <Stat label="MAX LEAN ≈" value={`${Math.round(metrics.maxLeanDeg)}°`} palette={palette} />
+        <Stat label={t('dash.average')} value={units.speed(metrics.avgSpeedKmh)} unit={units.speedUnit} palette={palette} />
+        <Stat label={t('dash.top')} value={units.speed(metrics.maxSpeedKmh)} unit={units.speedUnit} palette={palette} />
+        <Stat label={t('dash.maxLean')} value={`${Math.round(metrics.maxLeanDeg)}°`} palette={palette} />
         <Focusable index={0} focus={dash.focus} palette={palette}>
-          <Text style={[styles.button, { color: palette.warn }]}>Reset trip</Text>
+          <Text style={[styles.button, { color: palette.warn }]}>{t('dash.resetTrip')}</Text>
         </Focusable>
       </View>
     </View>
@@ -249,6 +253,7 @@ function TripPage({ metrics, dash, palette }: PageProps) {
 const MUSIC_GLYPHS: Record<string, string> = { musicPrevious: '⏮\uFE0E', musicNext: '⏭\uFE0E' };
 
 function MusicPage({ dash, palette }: PageProps) {
+  const t = useT();
   const spotify = useAppState((s) => s.spotify);
   const playback = spotify.playback;
   // Re-render each second so the bar moves between polls.
@@ -261,8 +266,8 @@ function MusicPage({ dash, palette }: PageProps) {
   const progress = playback ? currentProgressMs(playback, Date.now()) : 0;
   const share = playback && playback.durationMs > 0 ? progress / playback.durationMs : 0;
   const message = !spotify.connected
-    ? 'Connect Spotify in the phone app'
-    : (spotify.error ?? (playback ? null : 'Nothing playing. Start a song in Spotify.'));
+    ? t('dash.connectSpotify')
+    : (spotify.error ?? (playback ? null : t('dash.nothingPlaying')));
 
   return (
     <View style={styles.row}>
@@ -306,18 +311,19 @@ function MusicPage({ dash, palette }: PageProps) {
 }
 
 function MenuPage({ dash, palette }: PageProps) {
+  const t = useT();
   const labels: Record<string, string> = {
-    ride: 'Ride',
-    map: 'Map',
-    music: 'Music',
-    trip: 'Trip',
-    theme: THEME_LABELS[dash.theme],
+    ride: pageTitle('ride'),
+    map: pageTitle('map'),
+    music: pageTitle('music'),
+    trip: pageTitle('trip'),
+    theme: themeLabel(dash.theme),
   };
   return (
     <View style={styles.menu}>
       {PAGE_ITEMS.menu.map((item, index) => (
         <Focusable key={item} index={index} focus={dash.focus} palette={palette} grow>
-          {item === 'theme' ? <Text style={[styles.menuCaption, { color: palette.dim }]}>COLOURS</Text> : null}
+          {item === 'theme' ? <Text style={[styles.menuCaption, { color: palette.dim }]}>{t('dash.colours')}</Text> : null}
           <Text numberOfLines={2} style={[styles.menuItem, { color: palette.text }]}>
             {labels[item]}
           </Text>
@@ -349,6 +355,7 @@ const BARS = ['#ffffff', '#ffff00', '#00ffff', '#00ff00', '#ff00ff', '#ff0000', 
  * dash is told apart from a dash that shows nothing.
  */
 function TestPattern() {
+  const t = useT();
   const [frame, setFrame] = useState(0);
   const clock = useClock();
   useEffect(() => {
@@ -363,7 +370,7 @@ function TestPattern() {
         ))}
       </View>
       <View style={styles.testInfo}>
-        <Text style={styles.testText}>TEST PICTURE</Text>
+        <Text style={styles.testText}>{t('dash.testPicture')}</Text>
         <Text style={styles.testCounter}>{String(frame).padStart(6, '0')}</Text>
         <Text style={styles.testText}>{clock}</Text>
       </View>
@@ -374,6 +381,8 @@ function TestPattern() {
 }
 
 export function DashScreen() {
+  // Subscribes the tab row to language changes.
+  useT();
   const dash = useAppState((s) => s.dash);
   const testPattern = useAppState((s) => s.testPattern);
   const metrics = useAppState((s) => s.metrics);
@@ -401,7 +410,7 @@ export function DashScreen() {
                 { color: page === dash.page ? palette.accent : palette.dim },
                 page === dash.page && { borderBottomColor: palette.accent2 },
               ]}>
-              {PAGE_TITLES[page].toUpperCase()}
+              {pageTitle(page).toUpperCase()}
             </Text>
           </Pressable>
         ))}

@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 
+import { useT } from '../../i18n';
 import { colors } from '../../ui/kit';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -14,6 +15,7 @@ const icon = (name: IconName) =>
   };
 
 export default function TabsLayout() {
+  const t = useT();
   return (
     <Tabs
       screenOptions={{
@@ -22,11 +24,11 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.dim,
       }}>
-      <Tabs.Screen name="index" options={{ title: 'Link', tabBarIcon: icon('swap-horizontal') }} />
-      <Tabs.Screen name="buttons" options={{ title: 'Buttons', tabBarIcon: icon('game-controller-outline') }} />
-      <Tabs.Screen name="metrics" options={{ title: 'Metrics', tabBarIcon: icon('speedometer-outline') }} />
-      <Tabs.Screen name="rides" options={{ title: 'Rides', tabBarIcon: icon('map-outline') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: icon('settings-outline') }} />
+      <Tabs.Screen name="index" options={{ title: t('tabs.link'), tabBarIcon: icon('swap-horizontal') }} />
+      <Tabs.Screen name="buttons" options={{ title: t('tabs.buttons'), tabBarIcon: icon('game-controller-outline') }} />
+      <Tabs.Screen name="metrics" options={{ title: t('tabs.metrics'), tabBarIcon: icon('speedometer-outline') }} />
+      <Tabs.Screen name="rides" options={{ title: t('tabs.rides'), tabBarIcon: icon('map-outline') }} />
+      <Tabs.Screen name="settings" options={{ title: t('tabs.settings'), tabBarIcon: icon('settings-outline') }} />
     </Tabs>
   );
 }

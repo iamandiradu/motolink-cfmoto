@@ -2,6 +2,8 @@
 import { ReactNode, createContext, useContext, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { t as translateNow, useT } from '../i18n';
+
 export const colors = {
   bg: '#000000',
   card: '#12161c',
@@ -75,13 +77,14 @@ export function Card(props: { title?: string; children: ReactNode; collapsible?:
 
 /** An explanation the reader can close for good. */
 export function Hint(props: { title: string; children: ReactNode; onDismiss: () => void }) {
+  const t = useT();
   return (
     <View style={[styles.card, styles.hint]}>
       <View style={styles.hintHeader}>
         <Text style={styles.cardTitle}>{props.title}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Dismiss: ${props.title}`}
+          accessibilityLabel={t('kit.dismiss', { title: props.title })}
           hitSlop={12}
           onPress={props.onDismiss}
           style={styles.hintClose}>
@@ -101,7 +104,7 @@ export function Label({ children }: { children: ReactNode }) {
 /** Asks before something that cannot be undone. */
 export function confirm(title: string, message: string, action: string, onConfirm: () => void): void {
   Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
+    { text: translateNow('common.cancel'), style: 'cancel' },
     { text: action, style: 'destructive', onPress: onConfirm },
   ]);
 }
@@ -181,11 +184,12 @@ export function Stepper(props: {
   step: number;
   onChange: (value: number) => void;
 }) {
+  const t = useT();
   const set = (next: number) => props.onChange(Math.min(props.max, Math.max(props.min, next)));
   const button = (glyph: string, name: string, next: number, disabled: boolean) => (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${name} ${props.label}`}
+      accessibilityLabel={name}
       disabled={disabled}
       onPress={() => set(next)}
       style={[styles.stepButton, disabled && { opacity: 0.35 }]}>
@@ -195,12 +199,12 @@ export function Stepper(props: {
   return (
     <View style={styles.stepper}>
       <Text style={styles.stepLabel}>{props.label}</Text>
-      {button('−', 'Decrease', props.value - props.step, props.value <= props.min)}
+      {button('−', t('kit.decrease', { label: props.label }), props.value - props.step, props.value <= props.min)}
       <Text style={styles.stepValue}>
         {props.value}
         {props.unit}
       </Text>
-      {button('+', 'Increase', props.value + props.step, props.value >= props.max)}
+      {button('+', t('kit.increase', { label: props.label }), props.value + props.step, props.value >= props.max)}
     </View>
   );
 }

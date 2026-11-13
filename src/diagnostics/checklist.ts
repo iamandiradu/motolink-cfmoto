@@ -7,6 +7,7 @@
  * dash called back at all, the serial check, the video channel opening and a
  * connect-then-drop loop.
  */
+import { TranslationKey, t } from '../i18n';
 import type { SessionSnapshot, LinkState } from '../protocol/session';
 import { redactText } from './report';
 
@@ -72,156 +73,75 @@ const RANK: Record<LinkState, number> = {
   streaming: 6,
 };
 
-const TITLES: Record<StepId, string> = {
-  paired: 'Paired with a bike',
-  wifi: 'Phone on the dash Wi-Fi',
-  probe: 'Dash answered',
-  callback: 'Dash called back',
-  identity: 'Dash described itself',
-  serial: 'Serial check',
-  picture: 'Picture size agreed',
-  pulls: 'Dash asking for video',
-  frames: 'Picture flowing',
-};
+// Texts are looked up when the checklist is built, so they follow the app
+// language. The log lines it reads stay English: they are matched exactly.
 
-const HEADLINE_ACTIVE: Record<StepId, string> = {
-  paired: 'Pair with the bike to start.',
-  wifi: 'Waiting for the phone to join the dash Wi-Fi.',
-  probe: 'Asking the dash to connect.',
-  callback: 'Waiting for the dash to call back.',
-  identity: 'Waiting for the dash to describe itself.',
-  serial: 'Waiting for the dash to check the phone.',
-  picture: 'Waiting for the dash to agree a picture size.',
-  pulls: 'Picture size agreed. Waiting for the dash to ask for video.',
-  frames: 'Waiting for the first picture to reach the dash.',
-};
+const hint = (causes: string[], actions: string[]): StepHint => ({ causes, actions });
 
-const HEADLINE_FAILED: Record<StepId, string> = {
-  paired: 'Pair with the bike to start.',
-  wifi: 'The phone is not on the dash Wi-Fi.',
-  probe: 'The dash did not accept the connection.',
-  callback: 'The dash never called back.',
-  identity: 'The dash stopped before describing itself.',
-  serial: 'The serial check did not pass.',
-  picture: 'The dash stopped before agreeing a picture size.',
-  pulls: 'The dash agreed a picture but never asked for video.',
-  frames: 'The picture stopped reaching the dash.',
-};
-
-// ---------------------------------------------------------------------------
-// Hints
-
-const HINT_PAIR: StepHint = {
-  causes: ['No bike is saved on this phone yet.'],
-  actions: [
-    'Switch the ignition on, open MotoPlay on the dash and choose the phone connection screen.',
-    'Scan the QR code the dash shows.',
-  ],
-};
+function hintPair(): StepHint {
+  return hint([t('checklist.hint.pairCause')], [t('checklist.hint.pairAction1'), t('checklist.hint.pairAction2')]);
+}
 
 function hintNoWifi(joinUnavailable: boolean): StepHint {
-  const causes = ['The bike is off, or the phone has not joined the dash Wi-Fi yet.'];
-  if (joinUnavailable) causes.push('This copy of MotoLink cannot join Wi-Fi by itself.');
-  return {
-    causes,
-    actions: [
-      'Switch the ignition on.',
-      'In iOS Settings > Wi-Fi, join the network that starts with CFMOTO or DIRECT-.',
-      'Come back to MotoLink. It carries on by itself.',
-    ],
-  };
+  const causes = [t('checklist.hint.noWifiCause')];
+  if (joinUnavailable) causes.push(t('checklist.hint.noWifiJoinCause'));
+  return hint(causes, [
+    t('checklist.hint.noWifiAction1'),
+    t('checklist.hint.noWifiAction2'),
+    t('checklist.hint.noWifiAction3'),
+  ]);
 }
 
-const HINT_OTHER_WIFI: StepHint = {
-  causes: ['The phone is on another Wi-Fi network, such as home or a hotspot.'],
-  actions: [
-    'In iOS Settings > Wi-Fi, choose the network that starts with CFMOTO or DIRECT-.',
-    'If the phone keeps going back to another network, turn off Auto-Join for that one.',
-  ],
-};
+function hintOtherWifi(): StepHint {
+  return hint([t('checklist.hint.otherWifiCause')], [t('checklist.hint.otherWifiAction1'), t('checklist.hint.otherWifiAction2')]);
+}
 
-const HINT_PROBE_REFUSED: StepHint = {
-  causes: [
-    'The CFMOTO app is open on this or another phone and holds the connection.',
-    'The dash is not on the MotoPlay phone connection screen.',
-  ],
-  actions: [
-    'Close the CFMOTO app fully (swipe it away), on every phone near the bike.',
-    'On the dash, open MotoPlay and choose the phone connection screen.',
-    'If it still says no, switch the ignition off and on again.',
-  ],
-};
+function hintProbeRefused(): StepHint {
+  return hint(
+    [t('checklist.hint.refusedCause1'), t('checklist.hint.refusedCause2')],
+    [t('checklist.hint.refusedAction1'), t('checklist.hint.refusedAction2'), t('checklist.hint.refusedAction3')],
+  );
+}
 
-const HINT_PROBE_SILENT: StepHint = {
-  causes: [
-    'The dash is not on the MotoPlay phone connection screen.',
-    'The phone is on the dash Wi-Fi but the dash is at another address.',
-  ],
-  actions: [
-    'On the dash, open MotoPlay and choose the phone connection screen.',
-    'Turn Wi-Fi off and on in Control Centre, then wait for the phone to rejoin the dash.',
-    'If it still fails, share a report from Settings after the ride.',
-  ],
-};
+function hintProbeSilent(): StepHint {
+  return hint(
+    [t('checklist.hint.silentCause1'), t('checklist.hint.silentCause2')],
+    [t('checklist.hint.silentAction1'), t('checklist.hint.silentAction2'), t('checklist.hint.silentAction3')],
+  );
+}
 
-const HINT_CALLBACK: StepHint = {
-  causes: [
-    'A VPN is on and sends the traffic away from the dash.',
-    'Local Network access for MotoLink is turned off.',
-  ],
-  actions: [
-    'Turn off any VPN (Settings > VPN, or the VPN app).',
-    'In Settings > Privacy & Security > Local Network, turn MotoLink on.',
-    'Then tap Connect again.',
-  ],
-};
+function hintCallback(): StepHint {
+  return hint(
+    [t('checklist.hint.callbackCause1'), t('checklist.hint.callbackCause2')],
+    [t('checklist.hint.callbackAction1'), t('checklist.hint.callbackAction2'), t('checklist.hint.callbackAction3')],
+  );
+}
 
-const HINT_IDENTITY: StepHint = {
-  causes: ['The dash opened the link but has not sent its details yet.'],
-  actions: ['Wait a few seconds.', 'If it stays here, try the other Dash generation in Settings.'],
-};
+/** Identity, serial and picture steps: wait, then try the other dash generation. */
+function hintWait(causes: string[]): StepHint {
+  return hint(causes, [t('checklist.hint.wait'), t('checklist.hint.tryGeneration')]);
+}
 
-const HINT_SERIAL: StepHint = {
-  causes: ['Some dashes check the phone before they agree a picture.'],
-  actions: ['Wait a few seconds.', 'If it stays here, try the other Dash generation in Settings.'],
-};
-
-const HINT_PICTURE: StepHint = {
-  causes: [
-    'The dash has not opened the picture channel yet.',
-    'The dash may not accept how the phone introduced itself.',
-  ],
-  actions: ['Wait a few seconds.', 'If it stays here, try the other Dash generation in Settings.'],
-};
-
-const HINT_PULLS: StepHint = {
-  causes: ['The dash is showing its own gauges screen, not MotoPlay.'],
-  actions: ['On the dash, open MotoPlay. The picture starts as soon as it is on screen.'],
-};
+function hintPulls(): StepHint {
+  return hint([t('checklist.hint.pullsCause')], [t('checklist.hint.pullsAction')]);
+}
 
 function hintFrames(mirroring: boolean): StepHint {
-  return {
-    causes: mirroring
-      ? ['Screen mirroring stopped, or the phone is locked.', 'MotoLink is not open on the phone.']
-      : ['MotoLink is not open on screen, or the phone is locked.'],
-    actions: mirroring
-      ? ['Unlock the phone and check that mirroring is still on.', 'Open MotoLink and keep the phone unlocked.']
-      : ['Open MotoLink and keep it on screen with the phone unlocked.'],
-  };
+  return mirroring
+    ? hint(
+        [t('checklist.hint.framesMirrorCause1'), t('checklist.hint.framesMirrorCause2')],
+        [t('checklist.hint.framesMirrorAction1'), t('checklist.hint.framesMirrorAction2')],
+      )
+    : hint([t('checklist.hint.framesCause')], [t('checklist.hint.framesAction')]);
 }
 
-const HINT_DROP_LOOP: StepHint = {
-  causes: ['The dash does not accept the picture size or how the phone introduced itself.'],
-  actions: [
-    'In Settings, switch to the other Dash generation, then tap Connect again.',
-    'If it keeps dropping, share a report from Settings after the ride.',
-  ],
-};
+function hintDropLoop(): StepHint {
+  return hint([t('checklist.hint.dropCause')], [t('checklist.hint.dropAction1'), t('checklist.hint.dropAction2')]);
+}
 
-const HINT_PHONE_KEY: StepHint = {
-  causes: ['The phone could not prepare the link.'],
-  actions: ['Close MotoLink fully (swipe it away) and open it again.'],
-};
+function hintPhoneKey(): StepHint {
+  return hint([t('checklist.hint.keyCause')], [t('checklist.hint.keyAction')]);
+}
 
 // ---------------------------------------------------------------------------
 // Log reading
@@ -375,10 +295,6 @@ function wifiKind(ip: string | null): WifiKind {
   return 'other';
 }
 
-const WIFI_NAME: Record<'hotspot' | 'direct', string> = {
-  hotspot: 'dash hotspot',
-  direct: 'dash Wi-Fi Direct network',
-};
 
 interface StepDraft {
   id: StepId;
@@ -391,8 +307,14 @@ interface StepDraft {
   failure?: { detail: string; hint: StepHint; headline?: string };
 }
 
-function plural(n: number, word: string): string {
-  return `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
+/** Plural text with the count shown as before ("1,240"), and `count` for picking the form. */
+function counted(key: TranslationKey, n: number, params: Record<string, string | number> = {}): string {
+  return t(key, { ...params, count: n, n: n.toLocaleString('en-US') });
+}
+
+/** The same sentence with or without the dash address, so each language words both itself. */
+function withAddress(key: TranslationKey, keyAt: TranslationKey, address: string | null): string {
+  return address ? t(keyAt, { address }) : t(key);
 }
 
 function shortError(error: string): string {
@@ -415,9 +337,9 @@ export function buildChecklist(input: ChecklistInput): Checklist {
   drafts.push({
     id: 'paired',
     reached: input.paired ? 'done' : false,
-    doneDetail: 'Bike saved on this phone.',
-    activeDetail: 'No bike saved yet. Scan the QR code on the dash.',
-    activeHint: HINT_PAIR,
+    doneDetail: t('checklist.detail.pairedDone'),
+    activeDetail: t('checklist.detail.pairedActive'),
+    activeHint: hintPair(),
   });
 
   const wifiOk = kind === 'hotspot' || kind === 'direct';
@@ -425,53 +347,62 @@ export function buildChecklist(input: ChecklistInput): Checklist {
     id: 'wifi',
     reached: wifiOk || rank >= RANK.waitingForDash || dropLoop ? 'done' : false,
     doneDetail: wifiOk
-      ? `On the ${WIFI_NAME[kind as 'hotspot' | 'direct']} (${input.phoneIp}).`
-      : `On the dash network (${input.phoneIp ?? 'address unknown'}).`,
+      ? t(kind === 'hotspot' ? 'checklist.detail.wifiHotspot' : 'checklist.detail.wifiDirect', { ip: input.phoneIp ?? '' })
+      : t('checklist.detail.wifiDash', { ip: input.phoneIp ?? t('checklist.detail.addressUnknown') }),
     activeDetail:
       kind === 'none'
-        ? 'Wi-Fi has no address yet.'
-        : `On another network (${input.phoneIp}). Dash networks use 192.168.0.x or 192.168.49.x.`,
-    activeHint: kind === 'other' ? HINT_OTHER_WIFI : hintNoWifi(facts.joinUnavailable),
+        ? t('checklist.detail.wifiNoAddress')
+        : t('checklist.detail.wifiOther', { ip: input.phoneIp ?? '' }),
+    activeHint: kind === 'other' ? hintOtherWifi() : hintNoWifi(facts.joinUnavailable),
     failure:
       kind === 'other' && rank > 0
         ? {
-            detail: `On another network (${input.phoneIp}). Dash networks use 192.168.0.x or 192.168.49.x.`,
-            hint: HINT_OTHER_WIFI,
-            headline: 'The phone is on another Wi-Fi network.',
+            detail: t('checklist.detail.wifiOther', { ip: input.phoneIp ?? '' }),
+            hint: hintOtherWifi(),
+            headline: t('checklist.detail.wifiOtherHeadline'),
           }
         : undefined,
   });
 
-  const dashAt = input.dashAddress ? ` at ${input.dashAddress}` : '';
+  const dashAt = input.dashAddress;
   const probe = facts.lastProbe?.result ?? null;
   const probeDone = rank >= RANK.waitingForDash || (rank === RANK.probing && probe === 'accepted') || !!dropLoop;
   let probeFailure: StepDraft['failure'];
   if (probe === 'rejected' || probe === 'refused') {
     probeFailure = {
-      detail: probe === 'rejected' ? `The dash${dashAt} said no.` : `The dash${dashAt} refused the connection.`,
-      hint: HINT_PROBE_REFUSED,
+      detail:
+        probe === 'rejected'
+          ? withAddress('checklist.detail.probeRejected', 'checklist.detail.probeRejectedAt', dashAt)
+          : withAddress('checklist.detail.probeRefused', 'checklist.detail.probeRefusedAt', dashAt),
+      hint: hintProbeRefused(),
     };
   } else if (probe === 'timeout' || probe === 'error') {
-    probeFailure = { detail: `No answer from the dash${dashAt}.`, hint: HINT_PROBE_SILENT };
+    probeFailure = {
+      detail: withAddress('checklist.detail.probeSilent', 'checklist.detail.probeSilentAt', dashAt),
+      hint: hintProbeSilent(),
+    };
   }
   drafts.push({
     id: 'probe',
     reached: probeDone ? 'done' : false,
-    doneDetail: `The dash${dashAt} accepted the phone.`,
-    activeDetail: rank === 0 ? 'Not connecting. Tap Connect.' : `Asking the dash${dashAt} to connect.`,
-    activeHint: HINT_PROBE_SILENT,
+    doneDetail: withAddress('checklist.detail.probeDone', 'checklist.detail.probeDoneAt', dashAt),
+    activeDetail:
+      rank === 0
+        ? t('checklist.detail.probeIdle')
+        : withAddress('checklist.detail.probeAsking', 'checklist.detail.probeAskingAt', dashAt),
+    activeHint: hintProbeSilent(),
     failure: probeFailure,
   });
 
   drafts.push({
     id: 'callback',
     reached: rank >= RANK.handshaking || dropLoop ? 'done' : false,
-    doneDetail: 'The dash opened the control connection.',
-    activeDetail: 'Waiting for the dash to connect to the phone.',
-    activeHint: HINT_CALLBACK,
+    doneDetail: t('checklist.detail.callbackDone'),
+    activeDetail: t('checklist.detail.callbackActive'),
+    activeHint: hintCallback(),
     failure:
       facts.noCallback && rank < RANK.waitingForDash
-        ? { detail: 'The dash accepted, then never connected to the phone.', hint: HINT_CALLBACK }
+        ? { detail: t('checklist.detail.callbackFailed'), hint: hintCallback() }
         : undefined,
   });
 
@@ -479,9 +410,9 @@ export function buildChecklist(input: ChecklistInput): Checklist {
   drafts.push({
     id: 'identity',
     reached: identityReached ? 'done' : false,
-    doneDetail: version ? `Dash software ${version}.` : 'The dash sent its details (no version given).',
-    activeDetail: 'Waiting for the dash to send its details.',
-    activeHint: HINT_IDENTITY,
+    doneDetail: version ? t('checklist.detail.identityDone', { version }) : t('checklist.detail.identityNoVersion'),
+    activeDetail: t('checklist.detail.identityActive'),
+    activeHint: hintWait([t('checklist.hint.identityCause')]),
   });
 
   const pictureLabel = dropLoop
@@ -493,9 +424,9 @@ export function buildChecklist(input: ChecklistInput): Checklist {
   drafts.push({
     id: 'serial',
     reached: serialPassed ? 'done' : pictureLabel ? 'skipped' : false,
-    doneDetail: 'The dash checked the phone and it passed.',
-    activeDetail: 'Waiting for the dash to check the phone.',
-    activeHint: HINT_SERIAL,
+    doneDetail: t('checklist.detail.serialDone'),
+    activeDetail: t('checklist.detail.serialActive'),
+    activeHint: hintWait([t('checklist.hint.serialCause')]),
   });
 
   drafts.push({
@@ -503,34 +434,40 @@ export function buildChecklist(input: ChecklistInput): Checklist {
     reached: pictureLabel ? 'done' : false,
     doneDetail:
       capture && !dropLoop
-        ? `${pictureLabel} at ${capture.fps} fps${
-            capture.width !== capture.deviceWidth || capture.height !== capture.deviceHeight
-              ? ` (sent as ${capture.width}x${capture.height})`
-              : ''
-          }.`
-        : `${pictureLabel}.`,
-    activeDetail: 'Waiting for the dash to ask for a picture size.',
-    activeHint: HINT_PICTURE,
+        ? capture.width !== capture.deviceWidth || capture.height !== capture.deviceHeight
+          ? t('checklist.detail.pictureDoneSent', {
+              size: pictureLabel ?? '',
+              fps: capture.fps,
+              sent: `${capture.width}x${capture.height}`,
+            })
+          : t('checklist.detail.pictureDone', { size: pictureLabel ?? '', fps: capture.fps })
+        : t('checklist.detail.pictureSize', { size: String(pictureLabel) }),
+    activeDetail: t('checklist.detail.pictureActive'),
+    activeHint: hintWait([t('checklist.hint.pictureCause1'), t('checklist.hint.pictureCause2')]),
   });
 
   const pulling = snapshot.state === 'streaming' || snapshot.framesSent > 0 || facts.dataOpened;
   drafts.push({
     id: 'pulls',
     reached: !dropLoop && rank >= RANK.negotiated && pulling ? 'done' : false,
-    doneDetail: 'The dash opened the video channel.',
-    activeDetail: 'The dash has not asked for video yet.',
-    activeHint: HINT_PULLS,
+    doneDetail: t('checklist.detail.pullsDone'),
+    activeDetail: t('checklist.detail.pullsActive'),
+    activeHint: hintPulls(),
   });
 
   const flowing = snapshot.state === 'streaming' && snapshot.framesSent > 0;
-  const source = input.mirroring ? 'phone screen' : 'MotoLink dash pages';
+  const source = input.mirroring ? t('checklist.detail.sourcePhone') : t('checklist.detail.sourcePages');
   drafts.push({
     id: 'frames',
     reached: flowing ? 'done' : false,
-    doneDetail: `${plural(snapshot.framesSent, 'frame')} sent${
-      snapshot.framesDropped > 0 ? `, ${snapshot.framesDropped.toLocaleString('en-US')} dropped` : ''
-    } (${source}).`,
-    activeDetail: 'No picture has reached the dash yet.',
+    doneDetail:
+      snapshot.framesDropped > 0
+        ? counted('checklist.detail.framesSentDropped', snapshot.framesSent, {
+            dropped: snapshot.framesDropped.toLocaleString('en-US'),
+            source,
+          })
+        : counted('checklist.detail.framesSent', snapshot.framesSent, { source }),
+    activeDetail: t('checklist.detail.framesActive'),
     activeHint: hintFrames(input.mirroring),
   });
 
@@ -539,9 +476,9 @@ export function buildChecklist(input: ChecklistInput): Checklist {
   let stuck: StepId | null = null;
   let headline = '';
   for (const draft of drafts) {
-    const base = { id: draft.id, title: TITLES[draft.id] };
+    const base = { id: draft.id, title: t(`checklist.titles.${draft.id}`) };
     if (stuck) {
-      steps.push({ ...base, status: 'waiting', detail: 'Not reached yet.' });
+      steps.push({ ...base, status: 'waiting', detail: t('checklist.detail.waiting') });
       continue;
     }
     if (draft.reached === 'done') {
@@ -549,42 +486,44 @@ export function buildChecklist(input: ChecklistInput): Checklist {
       continue;
     }
     if (draft.reached === 'skipped') {
-      steps.push({ ...base, status: 'skipped', detail: 'The dash did not ask for one.' });
+      steps.push({ ...base, status: 'skipped', detail: t('checklist.detail.skipped') });
       continue;
     }
     stuck = draft.id;
     if (dropLoop && RANK[snapshot.state] < RANK.streaming && isAfterCallback(draft.id)) {
-      const after = dropLoop.seconds !== null ? ` after about ${dropLoop.seconds} s` : '';
       steps.push({
         ...base,
         status: 'failed',
-        detail: `Connected, then the dash dropped the link${after} (${plural(dropLoop.count, 'time')}).`,
-        hint: HINT_DROP_LOOP,
+        detail:
+          dropLoop.seconds !== null
+            ? counted('checklist.detail.dropLoopAfter', dropLoop.count, { s: dropLoop.seconds })
+            : counted('checklist.detail.dropLoop', dropLoop.count),
+        hint: hintDropLoop(),
       });
-      headline = 'The dash keeps dropping the link after a few seconds.';
+      headline = t('checklist.detail.dropLoopHeadline');
     } else if (draft.failure) {
       steps.push({ ...base, status: 'failed', detail: draft.failure.detail, hint: draft.failure.hint });
-      headline = draft.failure.headline ?? HEADLINE_FAILED[draft.id];
+      headline = draft.failure.headline ?? t(`checklist.failed.${draft.id}`);
     } else if (snapshot.lastError && draft.id !== 'paired') {
       const keyError = /^RSA key/i.test(snapshot.lastError);
       steps.push({
         ...base,
         status: 'failed',
-        detail: `Last try failed: ${shortError(snapshot.lastError)}`,
-        hint: keyError ? HINT_PHONE_KEY : draft.activeHint,
+        detail: t('checklist.detail.lastTry', { error: shortError(snapshot.lastError) }),
+        hint: keyError ? hintPhoneKey() : draft.activeHint,
       });
-      headline = keyError ? 'The phone could not prepare the link.' : HEADLINE_FAILED[draft.id];
+      headline = keyError ? t('checklist.detail.keyHeadline') : t(`checklist.failed.${draft.id}`);
     } else {
       steps.push({ ...base, status: 'active', detail: draft.activeDetail, hint: draft.activeHint });
-      headline = HEADLINE_ACTIVE[draft.id];
+      headline = t(`checklist.active.${draft.id}`);
     }
   }
 
   if (!stuck) {
     headline =
       snapshot.framesDropped > 0
-        ? `The picture is on the dash, with ${plural(snapshot.framesDropped, 'frame')} dropped.`
-        : 'The picture is on the dash.';
+        ? counted('checklist.detail.allDoneDropped', snapshot.framesDropped)
+        : t('checklist.detail.allDone');
   }
   return { steps, stuck, headline };
 }

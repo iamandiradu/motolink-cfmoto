@@ -5,6 +5,8 @@
  */
 import * as Speech from 'expo-speech';
 
+import { getLanguage, speechLanguage } from '../i18n';
+
 let enabled = true;
 /** Text being spoken now, to drop a repeat that arrives while it is still playing. */
 let speaking: string | null = null;
@@ -32,7 +34,8 @@ export function say(text: string, options: { enabled?: boolean } = {}): boolean 
     const done = () => {
       if (speaking === trimmed) speaking = null;
     };
-    Speech.speak(trimmed, { onDone: done, onStopped: done, onError: done });
+    // Speak in the app language; without it the system voice reads e.g. Romanian with an English accent.
+    Speech.speak(trimmed, { language: speechLanguage(getLanguage()), onDone: done, onStopped: done, onError: done });
     return true;
   } catch {
     speaking = null;

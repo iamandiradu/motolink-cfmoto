@@ -3,26 +3,28 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { applyButtonMode } from '../../app-state/controller';
 import { dismissHint, saveLayout, saveSettings, useAppState } from '../../app-state/store';
-import { BUTTON_GROUPS, GESTURE_LABELS, Gesture, RawButtonEvent } from '../../buttons/gestures';
-import { ACTIONS, ACTION_LABELS, DEFAULT_LAYOUT, isDefaultLayout, setMapping } from '../../buttons/mapping';
+import { Gesture, RawButtonEvent, buttonGroups, gestureLabel } from '../../buttons/gestures';
+import { ACTIONS, DEFAULT_LAYOUT, actionLabel, isDefaultLayout, setMapping } from '../../buttons/mapping';
+import { TFunction, useT } from '../../i18n';
 import { Body, Button, Card, Choice, Hint, Screen, colors } from '../../ui/kit';
 
 const HINT_ID = 'buttons-intro';
 
-const MODE_TEXT = {
-  off: 'Handlebar buttons are ignored.',
-  volume: 'Reads Up and Down. Your music keeps playing.',
-  full: 'Reads every button. The app takes the place of your music player, so other music pauses.',
-} as const;
-
-function describeRaw(raw: RawButtonEvent): string {
+/**
+ * What the phone received, worded to sit inside a sentence. Each language
+ * writes it in the right case itself (German nouns keep their capital), so
+ * the caller no longer lower-cases it.
+ */
+function describeRaw(t: TFunction, raw: RawButtonEvent): string {
   if (raw.type === 'volume') {
-    return `Volume ${raw.delta > 0 ? 'up' : 'down'} by ${Math.round(Math.abs(raw.delta) * 100)}%`;
+    const pct = Math.round(Math.abs(raw.delta) * 100);
+    return raw.delta > 0 ? t('buttons.rawVolumeUp', { pct }) : t('buttons.rawVolumeDown', { pct });
   }
-  return { playPause: 'Play / pause key', next: 'Next-track key', previous: 'Previous-track key' }[raw.key];
+  return { playPause: t('buttons.rawPlayPause'), next: t('buttons.rawNext'), previous: t('buttons.rawPrevious') }[raw.key];
 }
 
 export default function ButtonsScreen() {
+  const t = useT();
   const layout = useAppState((s) => s.layout);
   const settings = useAppState((s) => s.settings);
   const last = useAppState((s) => s.lastButton);
@@ -35,15 +37,15 @@ export default function ButtonsScreen() {
   return (
     <Screen>
       {showHint ? (
-        <Hint title="How the buttons work" onDismiss={() => dismissHint(HINT_ID)}>
-          <Body dim>1. Pair the phone with the bike in iOS Bluetooth settings. Presses travel over Bluetooth.</Body>
-          <Body dim>2. Choose below which buttons the app listens to.</Body>
-          <Body dim>3. Press a button on the handlebar. It shows up under Last press.</Body>
-          <Body dim>4. Tap any row under What each button does to change it.</Body>
+        <Hint title={t('buttons.hintTitle')} onDismiss={() => dismissHint(HINT_ID)}>
+          <Body dim>{t('buttons.hint1')}</Body>
+          <Body dim>{t('buttons.hint2')}</Body>
+          <Body dim>{t('buttons.hint3')}</Body>
+          <Body dim>{t('buttons.hint4')}</Body>
         </Hint>
       ) : null}
 
-      <Card title="Listen to">
+      <Card title={t('buttons.listenTo')}>
         <Choice
           value={settings.buttonMode}
           onChange={(buttonMode) => {
@@ -51,35 +53,35 @@ export default function ButtonsScreen() {
             void applyButtonMode();
           }}
           options={[
-            { value: 'off', label: 'Nothing' },
-            { value: 'volume', label: 'Up and Down' },
-            { value: 'full', label: 'All buttons' },
+            { value: 'off', label: t('buttons.listenNothing') },
+            { value: 'volume', label: t('buttons.listenVolume') },
+            { value: 'full', label: t('buttons.listenAll') },
           ]}
         />
-        <Body dim>{MODE_TEXT[settings.buttonMode]}</Body>
+        <Body dim>{t(`buttons.mode.${settings.buttonMode}`)}</Body>
       </Card>
 
-      <Card title="Last press">
+      <Card title={t('buttons.lastPress')}>
         {captureOff ? (
-          <Body dim>Turn on listening above to see presses here.</Body>
+          <Body dim>{t('buttons.captureOff')}</Body>
         ) : last ? (
           <>
             <Text style={styles.lastGesture}>
-              {last.gesture ? GESTURE_LABELS[last.gesture] : 'Not recognised as a button'}
+              {last.gesture ? gestureLabel(last.gesture) : t('buttons.notRecognised')}
             </Text>
             <Body dim>
-              {last.gesture ? `Does: ${ACTION_LABELS[layout[last.gesture]]}. ` : ''}
-              Phone received: {describeRaw(last.raw).toLowerCase()}.
+              {last.gesture ? t('buttons.does', { action: actionLabel(layout[last.gesture]) }) : ''}
+              {t('buttons.phoneReceived', { raw: describeRaw(t, last.raw) })}
             </Body>
           </>
         ) : (
-          <Body dim>Nothing yet. Press a button on the handlebar.</Body>
+          <Body dim>{t('buttons.nothingYet')}</Body>
         )}
       </Card>
 
-      <Card title="What each button does">
-        {BUTTON_GROUPS.map((group) => (
-          <View key={group.button} style={styles.group}>
+      <Card title={t('buttons.whatEach')}>
+        {buttonGroups().map((group) => (
+          <View key={group.id} style={styles.group}>
             <Text style={styles.groupTitle}>{group.button}</Text>
             {group.gestures.map(({ gesture, label }) => {
               const open = editing === gesture;
@@ -88,13 +90,13 @@ export default function ButtonsScreen() {
                 <View key={gesture}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`${group.button}, ${label}: ${ACTION_LABELS[layout[gesture]]}`}
+                    accessibilityLabel={t('buttons.rowA11y', { button: group.button, gesture: label, action: actionLabel(layout[gesture]) })}
                     accessibilityState={{ expanded: open }}
                     onPress={() => setEditing(open ? null : gesture)}
                     style={styles.row}>
                     <Text style={styles.rowLabel}>{label}</Text>
                     <Text style={[styles.rowAction, changed && { color: colors.accent }]}>
-                      {ACTION_LABELS[layout[gesture]]}
+                      {actionLabel(layout[gesture])}
                     </Text>
                     <Text style={styles.chevron}>{open ? '▾' : '›'}</Text>
                   </Pressable>
@@ -116,8 +118,8 @@ export default function ButtonsScreen() {
                               {selected ? '●' : '○'}
                             </Text>
                             <Text style={[styles.optionLabel, selected && { color: colors.accent }]}>
-                              {ACTION_LABELS[action]}
-                              {action === DEFAULT_LAYOUT[gesture] ? '  (default)' : ''}
+                              {actionLabel(action)}
+                              {action === DEFAULT_LAYOUT[gesture] ? t('buttons.isDefault') : ''}
                             </Text>
                           </Pressable>
                         );
@@ -130,7 +132,7 @@ export default function ButtonsScreen() {
           </View>
         ))}
         <Button
-          label="Restore default layout"
+          label={t('buttons.restore')}
           kind="plain"
           disabled={isDefaultLayout(layout)}
           onPress={() => {
@@ -138,10 +140,7 @@ export default function ButtonsScreen() {
             setEditing(null);
           }}
         />
-        <Body dim>
-          Hold is taken from the 450 MT manual: holding Up sends the previous-track key, holding Down the next-track
-          key. Hold and Select need All buttons.
-        </Body>
+        <Body dim>{t('buttons.holdNote')}</Body>
       </Card>
 
       <Card>
@@ -150,15 +149,12 @@ export default function ButtonsScreen() {
           accessibilityState={{ expanded: advanced }}
           onPress={() => setAdvanced(!advanced)}
           style={styles.row}>
-          <Text style={styles.advancedTitle}>Advanced</Text>
+          <Text style={styles.advancedTitle}>{t('buttons.advanced')}</Text>
           <Text style={styles.chevron}>{advanced ? '▾' : '›'}</Text>
         </Pressable>
         {advanced ? (
           <>
-            <Body dim>
-              Up and Down arrive as phone volume changes. At full or zero volume a press changes nothing, so the app
-              can put the volume back to the middle after each press.
-            </Body>
+            <Body dim>{t('buttons.advancedBody')}</Body>
             <Choice
               value={settings.pinVolume ? 'on' : 'off'}
               onChange={(value) => {
@@ -166,8 +162,8 @@ export default function ButtonsScreen() {
                 void applyButtonMode();
               }}
               options={[
-                { value: 'on', label: 'Keep volume at 50%' },
-                { value: 'off', label: 'Leave volume alone' },
+                { value: 'on', label: t('buttons.pinOn') },
+                { value: 'off', label: t('buttons.pinOff') },
               ]}
             />
           </>

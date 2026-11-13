@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { Platform, Share } from 'react-native';
 
 import { getState } from '../app-state/store';
-import { GESTURE_LABELS } from '../buttons/gestures';
+import { gestureLabel } from '../buttons/gestures';
 import { formatCrashes, loadCrashes } from './crashLog';
 import { buildReport } from './report';
 import { formatTrace, linkTrace } from './trace';
@@ -18,7 +18,8 @@ export async function shareReport(): Promise<void> {
     link: state.link,
     settings: state.settings,
     mirroring: state.mirroring,
-    lastButton: state.lastButton?.gesture ? GESTURE_LABELS[state.lastButton.gesture] : null,
+    // English on purpose: the report is read by the developer.
+    lastButton: state.lastButton?.gesture ? gestureLabel(state.lastButton.gesture, 'en') : null,
     logs: state.logs,
   });
   // Wi-Fi name and password are stripped from every part.

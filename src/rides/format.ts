@@ -1,5 +1,30 @@
 /** Unit formatting shared by the ride screens. */
+import { t } from '../i18n';
+
 export const KM_TO_MI = 0.621371;
+
+const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const;
+
+/** Short month name (0-11) in the current language. */
+export function monthShort(month: number): string {
+  return t(`months.${MONTH_KEYS[((month % 12) + 12) % 12]}`);
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * "13 Nov 2026 09:30" in the current language, for titles on screen. The GPX
+ * file keeps defaultRideName (English) so exported names stay stable.
+ */
+export function rideDate(startedAt: number): string {
+  const d = new Date(startedAt);
+  return `${d.getDate()} ${monthShort(d.getMonth())} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** "Ride 13 Nov 2026 09:30" in the current language, for accessibility labels and dialogs. */
+export function rideName(startedAt: number): string {
+  return t('rides.rideName', { date: rideDate(startedAt) });
+}
 
 export interface Units {
   imperial: boolean;

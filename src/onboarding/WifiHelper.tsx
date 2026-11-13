@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Linking, StyleSheet, Text, View } from 'react-native';
 
+import { useT } from '../i18n';
 import { colors } from '../ui/kit';
 import { Action, Status } from './ui';
 
@@ -21,6 +22,7 @@ export interface WifiHelperProps {
 type Copied = 'name' | 'password' | null;
 
 export function WifiHelper({ ssid, password, connected, onDone }: WifiHelperProps) {
+  const t = useT();
   const [shown, setShown] = useState(false);
   const [copied, setCopied] = useState<Copied>(null);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -39,13 +41,13 @@ export function WifiHelper({ ssid, password, connected, onDone }: WifiHelperProp
       await Clipboard.setStringAsync(what === 'name' ? ssid : password);
       setCopyFailed(false);
       setCopied(what);
-      AccessibilityInfo.announceForAccessibility(what === 'name' ? 'Network name copied' : 'Password copied');
+      AccessibilityInfo.announceForAccessibility(what === 'name' ? t('wifi.announceName') : t('wifi.announcePassword'));
       if (clearTimer.current) clearTimeout(clearTimer.current);
       clearTimer.current = setTimeout(() => setCopied(null), 4000);
     } catch {
       setCopied(null);
       setCopyFailed(true);
-      AccessibilityInfo.announceForAccessibility('Could not copy. Show the password and type it instead.');
+      AccessibilityInfo.announceForAccessibility(t('wifi.announceFailed'));
     }
   };
 
@@ -54,26 +56,26 @@ export function WifiHelper({ ssid, password, connected, onDone }: WifiHelperProp
   };
 
   const steps = [
-    hasPassword ? 'Copy the password.' : 'This network has no password.',
-    'Tap Open Settings. iOS opens the MotoLink page, so tap Settings at the top left, then Wi-Fi.',
-    `Choose ${ssid}.`,
-    hasPassword ? 'Paste the password and tap Join.' : 'Tap Join if iOS asks.',
-    'Come back to MotoLink.',
+    hasPassword ? t('wifi.stepCopy') : t('wifi.stepNoPassword'),
+    t('wifi.stepOpen'),
+    t('wifi.stepChoose', { ssid }),
+    hasPassword ? t('wifi.stepPaste') : t('wifi.stepJoin'),
+    t('wifi.stepBack'),
   ];
 
   return (
     <View style={styles.root}>
       <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Network name</Text>
+        <Text style={styles.fieldLabel}>{t('wifi.networkName')}</Text>
         <View style={styles.fieldRow}>
-          <Text style={styles.value} selectable accessibilityLabel={`Network name: ${ssid}`}>
+          <Text style={styles.value} selectable accessibilityLabel={t('wifi.networkNameA11y', { ssid })}>
             {ssid}
           </Text>
           <Action
             compact
             kind="plain"
-            label={copied === 'name' ? 'Copied' : 'Copy'}
-            accessibilityLabel="Copy network name"
+            label={copied === 'name' ? t('wifi.copied') : t('wifi.copy')}
+            accessibilityLabel={t('wifi.copyNameA11y')}
             onPress={() => copy('name')}
           />
         </View>
@@ -81,38 +83,38 @@ export function WifiHelper({ ssid, password, connected, onDone }: WifiHelperProp
 
       {hasPassword ? (
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Password</Text>
+          <Text style={styles.fieldLabel}>{t('wifi.password')}</Text>
           <View style={styles.fieldRow}>
             <Text
               style={[styles.value, !shown && styles.hidden]}
               selectable={shown}
-              accessibilityLabel={shown ? `Password: ${password}` : 'Password, hidden'}>
+              accessibilityLabel={shown ? t('wifi.passwordA11y', { password }) : t('wifi.passwordHidden')}>
               {shown ? password : '•'.repeat(Math.min(password.length, 16))}
             </Text>
             <Action
               compact
               kind="plain"
-              label={shown ? 'Hide' : 'Show'}
-              accessibilityLabel={shown ? 'Hide password' : 'Show password'}
+              label={shown ? t('wifi.hide') : t('wifi.show')}
+              accessibilityLabel={shown ? t('wifi.hidePasswordA11y') : t('wifi.showPasswordA11y')}
               onPress={() => setShown(!shown)}
             />
             <Action
               compact
               kind="plain"
-              label={copied === 'password' ? 'Copied' : 'Copy'}
-              accessibilityLabel="Copy password"
+              label={copied === 'password' ? t('wifi.copied') : t('wifi.copy')}
+              accessibilityLabel={t('wifi.copyPasswordA11y')}
               onPress={() => copy('password')}
             />
           </View>
         </View>
       ) : null}
 
-      {copied ? <Status ok>{copied === 'name' ? 'Network name copied.' : 'Password copied. Paste it in Settings.'}</Status> : null}
-      {copyFailed ? <Status ok={false}>Could not copy. Tap Show and type the password instead.</Status> : null}
+      {copied ? <Status ok>{copied === 'name' ? t('wifi.statusName') : t('wifi.statusPassword')}</Status> : null}
+      {copyFailed ? <Status ok={false}>{t('wifi.copyFailed')}</Status> : null}
 
       <View accessibilityRole="list" style={styles.steps}>
         {steps.map((text, i) => (
-          <View key={i} style={styles.stepRow} accessible accessibilityLabel={`Step ${i + 1}: ${text}`}>
+          <View key={i} style={styles.stepRow} accessible accessibilityLabel={t('wifi.stepA11y', { n: i + 1, text })}>
             <Text style={styles.stepNumber}>{i + 1}.</Text>
             <Text style={styles.stepText}>{text}</Text>
           </View>
@@ -120,15 +122,15 @@ export function WifiHelper({ ssid, password, connected, onDone }: WifiHelperProp
       </View>
 
       {connected ? (
-        <Status ok>Connected to {ssid}.</Status>
+        <Status ok>{t('wifi.connectedTo', { ssid })}</Status>
       ) : (
-        <Action label="Open Settings" accessibilityHint="Opens the MotoLink page in iOS Settings" onPress={openSettings} />
+        <Action label={t('wifi.openSettings')} accessibilityHint={t('wifi.openSettingsHint')} onPress={openSettings} />
       )}
 
-      <Text style={styles.note}>You need to do this once. After that, iOS joins the dash Wi-Fi by itself.</Text>
+      <Text style={styles.note}>{t('wifi.note')}</Text>
 
       {onDone ? (
-        <Action kind={connected ? 'primary' : 'plain'} label={connected ? 'Done' : 'I have joined'} onPress={onDone} />
+        <Action kind={connected ? 'primary' : 'plain'} label={connected ? t('wifi.done') : t('wifi.joined')} onPress={onDone} />
       ) : null}
     </View>
   );

@@ -7,6 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Linking } from 'react-native';
 
 import { appendLog, getState, saveSettings, setState } from '../app-state/store';
+import { t } from '../i18n';
 import { base64Encode } from '../protocol/bytes';
 import {
   Fetch,
@@ -52,7 +53,7 @@ function randomString(bytes: number): string {
 export async function connectSpotify(): Promise<void> {
   const clientId = getState().settings.spotifyClientId.trim();
   if (!clientId) {
-    setSpotify({ error: 'Enter your Spotify client ID first.' });
+    setSpotify({ error: t('spotify.enterClientId') });
     return;
   }
   const verifier = randomString(48);
@@ -72,7 +73,7 @@ export async function handleRedirect(url: string): Promise<boolean> {
   const { verifier } = pending;
   pending = null;
   if ('error' in result) {
-    setSpotify({ error: `Spotify sign-in was not completed (${result.error}).` });
+    setSpotify({ error: t('spotify.notCompleted', { error: result.error }) });
     return true;
   }
   try {
@@ -129,7 +130,7 @@ export async function refreshPlayback(): Promise<void> {
 export async function musicCommand(command: MusicCommand | 'toggle'): Promise<void> {
   const token = await accessToken();
   if (!token) {
-    setSpotify({ error: 'Connect Spotify in Settings.' });
+    setSpotify({ error: t('spotify.connectInSettings') });
     return;
   }
   const playback = getState().spotify.playback;

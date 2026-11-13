@@ -12,45 +12,41 @@ import {
 } from '../../app-state/controller';
 import { dismissHint, saveBike, saveSettings, useAppState } from '../../app-state/store';
 import { DEFAULT_MIRROR_VIEW, MirrorView, PresetApp, isDefaultView, presetApps } from '../../mirror/presets';
-
-const PRESET_APPS = presetApps(Platform.OS);
 import { MotoLink } from '../../../modules/moto-link';
 import { ChecklistCard } from '../../diagnostics/ChecklistCard';
 import { buildChecklist } from '../../diagnostics/checklist';
 import { WifiHelper } from '../../onboarding/WifiHelper';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
+import { TFunction, useT } from '../../i18n';
 import { Body, Button, Card, Choice, Hint, Row, Screen, Stepper, colors, confirm } from '../../ui/kit';
 
-const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string }> = {
-  idle: { title: 'Not connected', hint: 'Tap Connect with the bike switched on.', color: colors.dim },
-  searching: {
-    title: 'Looking for the bike',
-    hint: 'Switch the ignition on and open MotoPlay on the dash. The phone joins the dash Wi-Fi by itself.',
-    color: colors.warn,
-  },
-  probing: { title: 'Bike found, asking to connect', hint: 'On the dash Wi-Fi. Waiting for the dash to answer.', color: colors.warn },
-  waitingForDash: { title: 'Dash accepted', hint: 'Waiting for the dash to call back.', color: colors.warn },
-  handshaking: { title: 'Connecting', hint: 'Exchanging details with the dash.', color: colors.warn },
-  negotiated: { title: 'Connected', hint: 'Picture size agreed. Waiting for the dash to show it.', color: colors.ok },
-  streaming: { title: 'On the dash', hint: 'The dash is showing the picture above.', color: colors.ok },
+const STATE_COLOR: Record<LinkState, string> = {
+  idle: colors.dim,
+  searching: colors.warn,
+  probing: colors.warn,
+  waitingForDash: colors.warn,
+  handshaking: colors.warn,
+  negotiated: colors.ok,
+  streaming: colors.ok,
 };
 
-const FIT_TEXT: Record<MirrorView['fit'], string> = {
-  auto: 'A sideways phone fills the dash. An upright phone is shown whole, with bars at the sides.',
-  fill: 'Always fills the dash. The edges that do not fit are cut off.',
-  fit: 'Always shows the whole screen. Bars appear where it does not reach.',
-};
+/** Read at render time, so the texts follow the app language. */
+function stateText(t: TFunction, state: LinkState): { title: string; hint: string; color: string } {
+  return { title: t(`link.state.${state}.title`), hint: t(`link.state.${state}.hint`), color: STATE_COLOR[state] };
+}
 
 /** Crop, zoom and fit of the mirrored picture, kept separately for each app. */
 function MirrorAdjust() {
+  const t = useT();
+  const presetList = presetApps(Platform.OS);
   const presets = useAppState((s) => s.settings.mirrorPresets);
   const active = useAppState((s) => s.settings.mirrorPreset);
   const strip = useAppState((s) => s.settings.mirrorStrip);
   const [open, setOpen] = useState(false);
   const view = presets[active];
   const changed = !isDefaultView(view);
-  const activeLabel = PRESET_APPS.find((app) => app.id === active)?.label ?? '';
+  const activeLabel = presetList.find((app) => app.id === active)?.label ?? '';
 
   const update = (patch: Partial<MirrorView>) => changeMirrorPreset(active, patch);
   const trim = (label: string, key: 'trimTop' | 'trimBottom' | 'trimLeft' | 'trimRight') => (
@@ -65,47 +61,47 @@ function MirrorAdjust() {
         onPress={() => setOpen(!open)}
         style={styles.adjustHeader}>
         <Text style={styles.adjustTitle}>
-          Adjust the picture: {activeLabel}
-          {changed ? ' (changed)' : ''}
+          {t('link.adjustTitle', { app: activeLabel })}
+          {changed ? t('link.changed') : ''}
         </Text>
         <Text style={styles.adjustChevron}>{open ? '▾' : '›'}</Text>
       </Pressable>
       {open ? (
         <View style={styles.adjustBody}>
-          <Body dim>Info strip with speed, time and the song or trip distance, beside the map.</Body>
+          <Body dim>{t('link.stripBody')}</Body>
           <Choice
             value={strip}
             onChange={setMirrorStrip}
             options={[
-              { value: 'bottom', label: 'Strip at bottom' },
-              { value: 'top', label: 'Strip at top' },
-              { value: 'off', label: 'No strip' },
+              { value: 'bottom', label: t('link.stripBottom') },
+              { value: 'top', label: t('link.stripTop') },
+              { value: 'off', label: t('link.stripOff') },
             ]}
           />
-          <Body dim>Each app keeps its own picture settings. Choose which one to adjust and use.</Body>
+          <Body dim>{t('link.presetsBody')}</Body>
           <Choice
             value={active}
             onChange={selectMirrorPreset}
-            options={PRESET_APPS.map((app) => ({ value: app.id, label: app.label }))}
+            options={presetList.map((app) => ({ value: app.id, label: app.label }))}
           />
           <Choice
             value={view.fit}
             onChange={(fit) => update({ fit })}
             options={[
-              { value: 'auto', label: 'Automatic' },
-              { value: 'fill', label: 'Fill' },
-              { value: 'fit', label: 'Whole screen' },
+              { value: 'auto', label: t('link.fitAuto') },
+              { value: 'fill', label: t('link.fitFill') },
+              { value: 'fit', label: t('link.fitWhole') },
             ]}
           />
-          <Body dim>{FIT_TEXT[view.fit]}</Body>
-          <Stepper label="Zoom" value={view.zoom} unit="%" min={100} max={250} step={10} onChange={(zoom) => update({ zoom })} />
-          <Body dim>Cut edges, to hide the status bar or an app&apos;s buttons. Sides are those of the picture as you see it.</Body>
-          {trim('Cut top', 'trimTop')}
-          {trim('Cut bottom', 'trimBottom')}
-          {trim('Cut left', 'trimLeft')}
-          {trim('Cut right', 'trimRight')}
+          <Body dim>{t(`link.fitText.${view.fit}`)}</Body>
+          <Stepper label={t('link.zoom')} value={view.zoom} unit="%" min={100} max={250} step={10} onChange={(zoom) => update({ zoom })} />
+          <Body dim>{t('link.trimBody')}</Body>
+          {trim(t('link.cutTop'), 'trimTop')}
+          {trim(t('link.cutBottom'), 'trimBottom')}
+          {trim(t('link.cutLeft'), 'trimLeft')}
+          {trim(t('link.cutRight'), 'trimRight')}
           <Button
-            label={`Reset ${activeLabel}`}
+            label={t('link.reset', { app: activeLabel })}
             kind="plain"
             disabled={!changed}
             onPress={() => update(DEFAULT_MIRROR_VIEW)}
@@ -117,6 +113,7 @@ function MirrorAdjust() {
 }
 
 function MirrorCard({ mirroring }: { mirroring: boolean }) {
+  const t = useT();
   const [missing, setMissing] = useState<string | null>(null);
 
   // Opening an app from here also switches to that app's picture settings.
@@ -128,31 +125,29 @@ function MirrorCard({ mirroring }: { mirroring: boolean }) {
   };
 
   return (
-    <Card title="Show the phone screen on the dash">
+    <Card title={t('link.mirrorTitle')}>
       <View style={styles.statusRow}>
         <View style={[styles.dot, { backgroundColor: mirroring ? colors.ok : colors.dim }]} />
-        <Text style={styles.statusTitle}>{mirroring ? 'Mirroring is on' : 'Mirroring is off'}</Text>
+        <Text style={styles.statusTitle}>{mirroring ? t('link.mirroringOn') : t('link.mirroringOff')}</Text>
       </View>
       <Body dim>
-        {mirroring
-          ? 'The dash shows whatever is on this phone. Open a navigation app and turn the phone sideways so the map fills the dash.'
-          : 'Works with any app: Apple Maps, Google Maps, Waze, Spotify. Tap Start, then confirm when the phone asks.'}
+        {mirroring ? t('link.mirroringOnBody') : t('link.mirroringOffBody')}
       </Body>
       <Button
-        label={mirroring ? 'Stop mirroring' : 'Start mirroring'}
+        label={mirroring ? t('link.stopMirroring') : t('link.startMirroring')}
         kind={mirroring ? 'plain' : 'primary'}
         onPress={toggleMirroring}
       />
       {mirroring ? (
         <>
           <View style={styles.apps}>
-            {PRESET_APPS.filter((app) => app.url).map((app) => (
+            {presetApps(Platform.OS).filter((app) => app.url).map((app) => (
               <View key={app.id} style={styles.app}>
                 <Button label={app.label} kind="plain" onPress={() => open(app)} />
               </View>
             ))}
           </View>
-          {missing ? <Text style={styles.error}>{missing} is not installed on this phone.</Text> : null}
+          {missing ? <Text style={styles.error}>{t('link.notInstalled', { app: missing })}</Text> : null}
         </>
       ) : null}
       <MirrorAdjust />
@@ -161,6 +156,7 @@ function MirrorCard({ mirroring }: { mirroring: boolean }) {
 }
 
 export default function LinkScreen() {
+  const t = useT();
   const bike = useAppState((s) => s.bike);
   const link = useAppState((s) => s.link);
   const mirroring = useAppState((s) => s.mirroring);
@@ -169,13 +165,13 @@ export default function LinkScreen() {
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
 
-  const status = STATE_TEXT[link.state];
+  const status = stateText(t, link.state);
   const active = link.state !== 'idle';
 
   const pairFromText = () => {
     const parsed = parsePairingQr(manual);
     if (!parsed) {
-      setManualError('That text has no Wi-Fi name and password. Paste the full link from the QR code.');
+      setManualError(t('link.manualError'));
       return;
     }
     setManualError(null);
@@ -190,14 +186,11 @@ export default function LinkScreen() {
   if (!bike) {
     return (
       <Screen>
-        <Card title="Pair with your bike">
-          <Body>
-            Switch the ignition on, open MotoPlay on the dash and choose the phone connection screen. The dash shows a
-            QR code. Scan it once; after that the app connects by itself.
-          </Body>
-          <Button label="Scan the dash QR" onPress={() => router.push('/scan')} />
+        <Card title={t('link.pairTitle')}>
+          <Body>{t('link.pairBody')}</Body>
+          <Button label={t('link.scanQr')} onPress={() => router.push('/scan')} />
         </Card>
-        <Card title="Or paste the QR link">
+        <Card title={t('link.pasteTitle')}>
           <TextInput
             value={manual}
             onChangeText={setManual}
@@ -206,12 +199,12 @@ export default function LinkScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             style={styles.input}
-            accessibilityLabel="QR link"
+            accessibilityLabel={t('link.qrLinkA11y')}
             returnKeyType="go"
             onSubmitEditing={pairFromText}
           />
           {manualError ? <Text style={styles.error}>{manualError}</Text> : null}
-          <Button label="Pair" kind="plain" onPress={pairFromText} disabled={manual.trim().length === 0} />
+          <Button label={t('link.pair')} kind="plain" onPress={pairFromText} disabled={manual.trim().length === 0} />
         </Card>
         <MirrorCard mirroring={mirroring} />
       </Screen>
@@ -228,16 +221,16 @@ export default function LinkScreen() {
         <Body dim>{status.hint}</Body>
         {link.lastError && active && link.state !== 'streaming' ? <Text style={styles.error}>{link.lastError}</Text> : null}
         {active ? (
-          <Button label="Disconnect" kind="plain" onPress={() => void disconnect()} />
+          <Button label={t('link.disconnect')} kind="plain" onPress={() => void disconnect()} />
         ) : (
-          <Button label="Connect" onPress={connect} />
+          <Button label={t('link.connect')} onPress={connect} />
         )}
       </Card>
 
       {/* While connecting: where it has got to, and what to do if it is stuck. */}
       {active && link.state !== 'streaming' ? (
         <ChecklistCard
-          title="Connection steps"
+          title={t('link.connectionSteps')}
           checklist={(() => {
             const network = MotoLink.getNetworkInfo();
             return buildChecklist({
@@ -255,28 +248,28 @@ export default function LinkScreen() {
 
       {/* The phone is not on the dash network: show how to join it by hand. */}
       {link.state === 'searching' ? (
-        <Card title="Join the dash Wi-Fi">
+        <Card title={t('link.joinWifi')}>
           <WifiHelper ssid={bike.ssid} password={bike.password} connected={false} />
         </Card>
       ) : null}
 
       <MirrorCard mirroring={mirroring} />
 
-      <Card title="Bike">
-        <Row label="Wi-Fi" value={bike.ssid} />
-        {link.dash?.name ? <Row label="Dash" value={link.dash.name} /> : null}
-        {link.dash?.sdkVersion ? <Row label="Dash software" value={link.dash.sdkVersion} /> : null}
+      <Card title={t('link.bike')}>
+        <Row label={t('link.wifi')} value={bike.ssid} />
+        {link.dash?.name ? <Row label={t('link.dash')} value={link.dash.name} /> : null}
+        {link.dash?.sdkVersion ? <Row label={t('link.dashSoftware')} value={link.dash.sdkVersion} /> : null}
         {link.capture ? (
-          <Row label="Picture" value={`${link.capture.width} × ${link.capture.height}`} />
+          <Row label={t('link.picture')} value={`${link.capture.width} × ${link.capture.height}`} />
         ) : null}
         {link.state === 'streaming' ? (
-          <Row label="Frames sent / dropped" value={`${link.framesSent} / ${link.framesDropped}`} />
+          <Row label={t('link.frames')} value={`${link.framesSent} / ${link.framesDropped}`} />
         ) : null}
         <Button
-          label="Forget this bike"
+          label={t('link.forget')}
           kind="danger"
           onPress={() =>
-            confirm('Forget this bike?', 'You will need to scan the dash QR code again to pair.', 'Forget', () => {
+            confirm(t('link.forgetTitle'), t('link.forgetBody'), t('link.forgetAction'), () => {
               void disconnect();
               saveBike(null);
             })
@@ -285,10 +278,10 @@ export default function LinkScreen() {
       </Card>
 
       {showRideHint ? (
-        <Hint title="Before you ride" onDismiss={() => dismissHint('before-ride')}>
-          <Body dim>Close the CFMOTO app. It uses the same connection, and the dash would talk to it instead.</Body>
-          <Body dim>Keep the phone screen on. Mirroring works with another app in front, but not with the phone locked.</Body>
-          <Body dim>Set your route before moving. The handlebar buttons cannot steer other apps.</Body>
+        <Hint title={t('link.beforeRideTitle')} onDismiss={() => dismissHint('before-ride')}>
+          <Body dim>{t('link.beforeRide1')}</Body>
+          <Body dim>{t('link.beforeRide2')}</Body>
+          <Body dim>{t('link.beforeRide3')}</Body>
         </Hint>
       ) : null}
     </Screen>

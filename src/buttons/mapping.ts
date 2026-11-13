@@ -2,6 +2,7 @@
  * Button layout: which action each handlebar gesture triggers on the dash UI.
  * A default layout ships with the app; every gesture can be remapped.
  */
+import { t } from '../i18n';
 import { GESTURES, Gesture } from './gestures';
 
 export const ACTIONS = [
@@ -24,23 +25,10 @@ export const ACTIONS = [
 
 export type DashAction = (typeof ACTIONS)[number];
 
-export const ACTION_LABELS: Record<DashAction, string> = {
-  none: 'Nothing',
-  focusNext: 'Next item',
-  focusPrevious: 'Previous item',
-  select: 'Select',
-  back: 'Back',
-  home: 'Home',
-  pageNext: 'Next page',
-  pagePrevious: 'Previous page',
-  zoomIn: 'Map zoom in',
-  zoomOut: 'Map zoom out',
-  toggleTheme: 'Next colour theme',
-  resetTrip: 'Reset trip',
-  musicPlayPause: 'Spotify play / pause',
-  musicNext: 'Spotify next song',
-  musicPrevious: 'Spotify previous song',
-};
+/** Name of an action in the current language; a function so it follows a language change. */
+export function actionLabel(action: DashAction): string {
+  return t(`actions.${action}`);
+}
 
 export type ButtonLayout = Record<Gesture, DashAction>;
 

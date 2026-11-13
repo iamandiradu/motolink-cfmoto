@@ -5,6 +5,7 @@
  */
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useT } from '../i18n';
 import { Body, Button, Card, Choice, Row, colors } from '../ui/kit';
 import { LearnedBike, workingIdentity } from './learned';
 import { Confidence, ProfileMatch } from './match';
@@ -12,10 +13,10 @@ import { BikeProfile } from './profiles';
 
 const AUTO = '__auto__';
 
-const CONFIDENCE: Record<Confidence, { label: string; color: string }> = {
-  certain: { label: 'Sure', color: colors.ok },
-  likely: { label: 'Probably', color: colors.accent },
-  guess: { label: 'Guess', color: colors.warn },
+const CONFIDENCE_COLOR: Record<Confidence, string> = {
+  certain: colors.ok,
+  likely: colors.accent,
+  guess: colors.warn,
 };
 
 export interface BikeCardProps {
@@ -35,40 +36,41 @@ function when(ms: number): string {
 }
 
 export function BikeCard(props: BikeCardProps) {
+  const t = useT();
   const { match, learned } = props;
-  const confidence = CONFIDENCE[match.confidence];
+  const confidence = { label: t(`bike.confidence.${match.confidence}`), color: CONFIDENCE_COLOR[match.confidence] };
   const capture = learned?.capture ?? null;
   const identity = workingIdentity(learned);
   const options = [
-    { value: AUTO, label: 'Automatic' },
+    { value: AUTO, label: t('bike.automatic') },
     ...props.profiles.map((p) => ({ value: p.id, label: p.name.replace(/^CFMOTO /, '') })),
   ];
 
   return (
-    <Card title="Your bike">
+    <Card title={t('bike.title')}>
       <View style={styles.header}>
         <Text style={styles.name}>{match.profile.name}</Text>
         <Text style={[styles.badge, { color: confidence.color, borderColor: confidence.color }]}>{confidence.label}</Text>
       </View>
       {match.reasons.length > 0 ? <Body dim>{match.reasons.join('. ')}.</Body> : null}
       {!match.profile.verified ? (
-        <Body dim>No one has recorded this bike yet. The app learns it from your dash.</Body>
+        <Body dim>{t('bike.notVerified')}</Body>
       ) : null}
 
-      <Row label="Model id" value={learned?.modelId ?? '—'} />
-      <Row label="Dash software" value={learned?.sdkVersion ?? '—'} />
-      <Row label="Dash name" value={learned?.huName ?? '—'} />
-      <Row label="Screen size" value={capture ? `${capture.deviceWidth} × ${capture.deviceHeight}` : '—'} />
-      <Row label="Frame rate" value={capture ? `${capture.fps} fps` : '—'} />
+      <Row label={t('bike.modelId')} value={learned?.modelId ?? '—'} />
+      <Row label={t('bike.dashSoftware')} value={learned?.sdkVersion ?? '—'} />
+      <Row label={t('bike.dashName')} value={learned?.huName ?? '—'} />
+      <Row label={t('bike.screenSize')} value={capture ? `${capture.deviceWidth} × ${capture.deviceHeight}` : '—'} />
+      <Row label={t('bike.frameRate')} value={capture ? t('bike.fps', { fps: capture.fps }) : '—'} />
       <Row
-        label="Touch screen"
-        value={learned?.supportScreenTouch == null ? '—' : learned.supportScreenTouch ? 'Yes' : 'No'}
+        label={t('bike.touch')}
+        value={learned?.supportScreenTouch == null ? '—' : learned.supportScreenTouch ? t('common.yes') : t('common.no')}
       />
-      <Row label="Settings that worked" value={identity ? `${identity.phoneOs}, ${identity.supportFunction}` : '—'} />
-      <Row label="First seen" value={learned ? when(learned.firstSeen) : '—'} />
-      <Row label="Last seen" value={learned ? when(learned.lastSeen) : '—'} />
+      <Row label={t('bike.worked')} value={identity ? `${identity.phoneOs}, ${identity.supportFunction}` : '—'} />
+      <Row label={t('bike.firstSeen')} value={learned ? when(learned.firstSeen) : '—'} />
+      <Row label={t('bike.lastSeen')} value={learned ? when(learned.lastSeen) : '—'} />
 
-      <Text style={styles.section}>Bike</Text>
+      <Text style={styles.section}>{t('bike.section')}</Text>
       <Choice<string>
         value={props.manualId ?? AUTO}
         options={options}
@@ -76,12 +78,12 @@ export function BikeCard(props: BikeCardProps) {
       />
 
       <Button
-        label="Share bike details"
+        label={t('bike.share')}
         kind="plain"
         disabled={props.canShare === false}
         onPress={props.onShare}
       />
-      <Body dim>Shares sizes and versions only. No Wi-Fi password, serial or address.</Body>
+      <Body dim>{t('bike.shareNote')}</Body>
     </Card>
   );
 }

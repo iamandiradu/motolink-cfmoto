@@ -2,29 +2,31 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useT } from '../i18n';
 import { Body, Card, colors } from '../ui/kit';
 import type { Checklist, ChecklistStep, StepStatus } from './checklist';
 
-const STATUS: Record<StepStatus, { icon: string; word: string; color: string }> = {
-  done: { icon: '✓', word: 'Done', color: colors.ok },
-  active: { icon: '…', word: 'Now', color: colors.warn },
-  waiting: { icon: '○', word: 'Waiting', color: colors.dim },
-  failed: { icon: '✕', word: 'Problem', color: colors.danger },
-  skipped: { icon: '–', word: 'Skipped', color: colors.dim },
+const STATUS: Record<StepStatus, { icon: string; color: string }> = {
+  done: { icon: '✓', color: colors.ok },
+  active: { icon: '…', color: colors.warn },
+  waiting: { icon: '○', color: colors.dim },
+  failed: { icon: '✕', color: colors.danger },
+  skipped: { icon: '–', color: colors.dim },
 };
 
 function HintBlock({ step }: { step: ChecklistStep }) {
+  const t = useT();
   if (!step.hint) return null;
   return (
     <View style={styles.hint}>
-      <Text style={styles.hintHeading}>Likely causes</Text>
+      <Text style={styles.hintHeading}>{t('checklist.likelyCauses')}</Text>
       {step.hint.causes.map((cause) => (
         <Text key={cause} style={styles.hintLine}>
           {'•  '}
           {cause}
         </Text>
       ))}
-      <Text style={styles.hintHeading}>What to do</Text>
+      <Text style={styles.hintHeading}>{t('checklist.whatToDo')}</Text>
       {step.hint.actions.map((action, index) => (
         <Text key={action} style={styles.hintLine}>
           {`${index + 1}.  `}
@@ -36,7 +38,8 @@ function HintBlock({ step }: { step: ChecklistStep }) {
 }
 
 function StepRow({ step, open, onToggle }: { step: ChecklistStep; open: boolean; onToggle: () => void }) {
-  const look = STATUS[step.status];
+  const t = useT();
+  const look = { ...STATUS[step.status], word: t(`checklist.status.${step.status}`) };
   const label = `${step.title}: ${look.word}. ${step.detail}`;
   const content = (
     <View style={styles.rowTop}>
@@ -66,7 +69,7 @@ function StepRow({ step, open, onToggle }: { step: ChecklistStep; open: boolean;
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={open ? 'Hides what to do' : 'Shows what to do'}
+        accessibilityHint={open ? t('checklist.hidesHint') : t('checklist.showsHint')}
         accessibilityState={{ expanded: open }}
         onPress={onToggle}
         style={({ pressed }) => [styles.pressable, pressed && { opacity: 0.6 }]}>
@@ -78,11 +81,12 @@ function StepRow({ step, open, onToggle }: { step: ChecklistStep; open: boolean;
 }
 
 export function ChecklistCard(props: { checklist: Checklist; title?: string }) {
+  const t = useT();
   // The stuck step starts open; the rider can fold it.
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const { steps, headline } = props.checklist;
   return (
-    <Card title={props.title ?? 'Connection checklist'}>
+    <Card title={props.title ?? t('checklist.defaultTitle')}>
       <Body>{headline}</Body>
       <View style={styles.list}>
         {steps.map((step) => (

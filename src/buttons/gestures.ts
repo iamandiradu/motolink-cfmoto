@@ -9,6 +9,7 @@
  *
  * This file turns those raw events into named gestures.
  */
+import { Language, getLanguage, t, translate } from '../i18n';
 
 export type RawButtonEvent =
   /** System volume moved; delta is on a 0..1 scale. */
@@ -29,47 +30,53 @@ export const GESTURES = [
 
 export type Gesture = (typeof GESTURES)[number];
 
-export const GESTURE_LABELS: Record<Gesture, string> = {
-  upPress: 'Up, press',
-  upDouble: 'Up, double press',
-  downPress: 'Down, press',
-  downDouble: 'Down, double press',
-  selectPress: 'Select, press',
-  nextPress: 'Down, hold',
-  nextDouble: 'Down, hold twice',
-  previousPress: 'Up, hold',
-  previousDouble: 'Up, hold twice',
-};
-
 /**
- * Gestures grouped by the physical button that produces them. On the 450 MT
- * the owner's manual says a long press of Up sends "previous song"; Down is
- * taken to mirror it with "next song".
+ * Name of a gesture, read at call time so it follows the app language. Pass
+ * 'en' for text the developer reads (the shared report).
  */
-export const BUTTON_GROUPS: readonly { button: string; gestures: readonly { gesture: Gesture; label: string }[] }[] = [
+export function gestureLabel(gesture: Gesture, lang: Language = getLanguage()): string {
+  return translate(lang, `gestures.${gesture}`);
+}
+
+type PressKind = 'press' | 'double' | 'hold' | 'holdTwice';
+
+const GROUPS: readonly { button: 'up' | 'down' | 'select'; gestures: readonly { gesture: Gesture; press: PressKind }[] }[] = [
   {
-    button: 'Up',
+    button: 'up',
     gestures: [
-      { gesture: 'upPress', label: 'Press' },
-      { gesture: 'upDouble', label: 'Double press' },
-      { gesture: 'previousPress', label: 'Hold' },
-      { gesture: 'previousDouble', label: 'Hold twice' },
+      { gesture: 'upPress', press: 'press' },
+      { gesture: 'upDouble', press: 'double' },
+      { gesture: 'previousPress', press: 'hold' },
+      { gesture: 'previousDouble', press: 'holdTwice' },
     ],
   },
   {
-    button: 'Down',
+    button: 'down',
     gestures: [
-      { gesture: 'downPress', label: 'Press' },
-      { gesture: 'downDouble', label: 'Double press' },
-      { gesture: 'nextPress', label: 'Hold' },
-      { gesture: 'nextDouble', label: 'Hold twice' },
+      { gesture: 'downPress', press: 'press' },
+      { gesture: 'downDouble', press: 'double' },
+      { gesture: 'nextPress', press: 'hold' },
+      { gesture: 'nextDouble', press: 'holdTwice' },
     ],
   },
   {
-    button: 'Select',
-    gestures: [{ gesture: 'selectPress', label: 'Press' }],
+    button: 'select',
+    gestures: [{ gesture: 'selectPress', press: 'press' }],
   },
 ];
+
+/**
+ * Gestures grouped by the physical button that produces them, with labels in
+ * the current language. On the 450 MT the owner's manual says a long press of
+ * Up sends "previous song"; Down is taken to mirror it with "next song".
+ */
+export function buttonGroups(): readonly { id: string; button: string; gestures: readonly { gesture: Gesture; label: string }[] }[] {
+  return GROUPS.map((group) => ({
+    id: group.button,
+    button: t(`buttons.button.${group.button}`),
+    gestures: group.gestures.map(({ gesture, press }) => ({ gesture, label: t(`buttons.press.${press}`) })),
+  }));
+}
 
 export interface GestureTiming {
   /** Two transport keys inside this window form a double tap. */

@@ -11,12 +11,14 @@ import { DashSurface } from '../dash/DashSurface';
 import { installCrashHandler } from '../diagnostics/crashLog';
 import { Onboarding } from '../onboarding/Onboarding';
 import { gloveScale } from '../comfort';
+import { useT } from '../i18n';
 import { GloveContext, colors } from '../ui/kit';
 
 // Before anything renders, so an error during start-up is kept for the report.
 installCrashHandler();
 
 function Shell() {
+  const t = useT();
   const insets = useSafeAreaInsets();
   const loaded = useAppState((s) => s.loaded);
   const onboardingDone = useAppState((s) => s.settings.onboardingDone);
@@ -47,7 +49,7 @@ function Shell() {
           contentStyle: { backgroundColor: colors.bg },
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="scan" options={{ title: 'Scan the dash QR', presentation: 'modal' }} />
+        <Stack.Screen name="scan" options={{ title: t('scan.title'), presentation: 'modal' }} />
       </Stack>
       {/* First run only. Stays mounted under the scan sheet so it sees the bike appear. */}
       {loaded && !onboardingDone ? (

@@ -1,6 +1,7 @@
 /**
  * Map helpers for a saved track. Pure: no React, no map library.
  */
+import { t } from '../i18n';
 import { haversineM } from '../metrics/trip';
 import type { RidePoint } from './recorder';
 
@@ -52,7 +53,13 @@ export function speedLegend({ imperial = false }: SpeedBandsOptions = {}): Speed
   return BAND_COLORS.map((color, index) => {
     const lo = index === 0 ? 0 : edges[index - 1];
     const hi = index < edges.length ? edges[index] : Infinity;
-    const label = index === 0 ? `Under ${hi} ${unit}` : hi === Infinity ? `${lo} ${unit} and over` : `${lo}–${hi} ${unit}`;
+    // Built at call time, so the legend follows the app language.
+    const label =
+      index === 0
+        ? t('speedBands.under', { speed: hi, unit })
+        : hi === Infinity
+          ? t('speedBands.over', { speed: lo, unit })
+          : t('speedBands.range', { lo, hi, unit });
     return { index, minKmh: toKmh(lo), maxKmh: toKmh(hi), color, label };
   });
 }

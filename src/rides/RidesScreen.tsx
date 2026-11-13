@@ -6,10 +6,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useT } from '../i18n';
 import { formatDuration } from '../metrics/trip';
 import { Body, Card, Row, Screen, colors } from '../ui/kit';
-import { formatDistance, formatSpeed } from './format';
-import { defaultRideName } from './gpx';
+import { formatDistance, formatSpeed, rideDate, rideName } from './format';
 import type { RideSummary } from './recorder';
 import { RideDetail } from './RideDetail';
 import { ServiceCard } from './ServiceCard';
@@ -34,6 +34,7 @@ function useNow(active: boolean): number {
 }
 
 export function RidesScreen({ imperial = false }: RidesScreenProps) {
+  const t = useT();
   const { recording, rides, loaded, start, stop, remove, exportGpx } = useRides();
   const now = useNow(recording !== null);
   const [stopping, setStopping] = useState(false);
@@ -49,12 +50,12 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
     try {
       const result = await stop();
       if (!result.saved && result.reason === 'no-track') {
-        Alert.alert('Nothing saved', 'No GPS position was recorded during this ride.');
+        Alert.alert(t('rides.nothingSavedTitle'), t('rides.nothingSavedBody'));
       } else if (result.saved && result.evicted > 0) {
-        Alert.alert('Ride saved', 'The oldest ride was removed to make room.');
+        Alert.alert(t('rides.savedTitle'), t('rides.savedBody'));
       }
     } catch {
-      Alert.alert('Could not save the ride', 'The phone storage did not accept it.');
+      Alert.alert(t('rides.saveFailedTitle'), t('rides.saveFailedBody'));
     } finally {
       setStopping(false);
     }
@@ -65,22 +66,22 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
     try {
       await exportGpx(ride.id);
     } catch {
-      Alert.alert('Could not export', 'This ride could not be read or shared.');
+      Alert.alert(t('rides.exportFailedTitle'), t('rides.exportFailedBody'));
     } finally {
       setExporting(null);
     }
   };
 
   const onDelete = (ride: RideSummary) => {
-    Alert.alert('Delete this ride?', `${defaultRideName(ride.startedAt)}. This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('rides.deleteTitle'), t('rides.deleteBody', { name: rideName(ride.startedAt) }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           remove(ride.id)
             .then(() => setSelectedId((id) => (id === ride.id ? null : id)))
-            .catch(() => Alert.alert('Could not delete', 'Try again.'));
+            .catch(() => Alert.alert(t('rides.deleteFailedTitle'), t('rides.deleteFailedBody')));
         },
       },
     ]);
@@ -106,27 +107,31 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
 
   return (
     <Screen>
-      <Card title={recording ? (recording.paused ? 'Recording, paused' : 'Recording') : 'New ride'}>
+      <Card title={recording ? (recording.paused ? t('rides.recordingPaused') : t('rides.recording')) : t('rides.newRide')}>
         {recording ? (
           <View
             style={styles.live}
             accessible
-            accessibilityLabel={`Recording${recording.paused ? ', paused at a stop' : ''}. ${distance(recording.distanceM)}, riding time ${formatDuration(recording.movingSeconds)}, total ${formatDuration(elapsed)}`}>
+            accessibilityLabel={t(recording.paused ? 'rides.liveA11yPaused' : 'rides.liveA11y', {
+              distance: distance(recording.distanceM),
+              moving: formatDuration(recording.movingSeconds),
+              total: formatDuration(elapsed),
+            })}>
             <View style={styles.liveItem}>
               <Text style={styles.liveValue}>{distance(recording.distanceM)}</Text>
-              <Text style={styles.liveLabel}>Distance</Text>
+              <Text style={styles.liveLabel}>{t('rides.distance')}</Text>
             </View>
             <View style={styles.liveItem}>
               <Text style={styles.liveValue}>{formatDuration(recording.movingSeconds)}</Text>
-              <Text style={styles.liveLabel}>Riding time</Text>
+              <Text style={styles.liveLabel}>{t('rides.ridingTime')}</Text>
             </View>
           </View>
         ) : (
-          <Body dim>Press Record when you set off and Stop when you arrive. Only rides you record are saved.</Body>
+          <Body dim>{t('rides.recordBody')}</Body>
         )}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={recording ? 'Stop recording and save the ride' : 'Start recording a ride'}
+          accessibilityLabel={recording ? t('rides.stopA11y') : t('rides.startA11y')}
           accessibilityState={{ disabled: stopping, busy: stopping }}
           disabled={stopping}
           onPress={recording ? onStop : () => start()}
@@ -135,50 +140,54 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
             { backgroundColor: recording ? colors.danger : colors.accent },
             (pressed || stopping) && { opacity: 0.6 },
           ]}>
-          <Text style={styles.recordLabel}>{recording ? 'Stop' : 'Record'}</Text>
+          <Text style={styles.recordLabel}>{recording ? t('rides.stop') : t('rides.record')}</Text>
         </Pressable>
-        {recording ? <Body dim>Total time {formatDuration(elapsed)}.</Body> : null}
+        {recording ? <Body dim>{t('rides.totalTime', { time: formatDuration(elapsed) })}</Body> : null}
         {recording?.paused ? (
           <View style={styles.paused} accessibilityLiveRegion="polite">
-            <Text style={styles.pausedText}>Paused at a stop</Text>
-            <Body dim>Riding time resumes when you move off. Press Stop to end the ride.</Body>
+            <Text style={styles.pausedText}>{t('rides.pausedAtStop')}</Text>
+            <Body dim>{t('rides.pausedBody')}</Body>
           </View>
         ) : null}
-        {recording ? <Body dim>Keep MotoLink running: the ride uses this phone&apos;s GPS.</Body> : null}
+        {recording ? <Body dim>{t('rides.keepRunning')}</Body> : null}
       </Card>
 
       <StatsCard rides={rides} imperial={imperial} />
       <ServiceCard imperial={imperial} />
 
       {loaded && rides.length === 0 ? (
-        <Card title="Saved rides">
-          <Body dim>No rides yet.</Body>
+        <Card title={t('rides.savedRides')}>
+          <Body dim>{t('rides.noRides')}</Body>
         </Card>
       ) : null}
 
       {rides.map((ride) => (
-        <Card key={ride.id} title={defaultRideName(ride.startedAt).replace(/^Ride /, '')}>
+        <Card key={ride.id} title={rideDate(ride.startedAt)}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Open ${defaultRideName(ride.startedAt)}: ${distance(ride.distanceM)}, riding time ${formatDuration(ride.movingSeconds)}`}
-            accessibilityHint="Shows the map and the full summary"
+            accessibilityLabel={t('rides.openA11y', {
+              name: rideName(ride.startedAt),
+              distance: distance(ride.distanceM),
+              time: formatDuration(ride.movingSeconds),
+            })}
+            accessibilityHint={t('rides.openHint')}
             onPress={() => setSelectedId(ride.id)}
             style={({ pressed }) => [styles.open, pressed && { opacity: 0.6 }]}>
-            <Row label="Distance" value={distance(ride.distanceM)} />
-            <Row label="Riding time" value={formatDuration(ride.movingSeconds)} />
-            <Row label="Top speed" value={speed(ride.maxSpeedKmh)} />
-            <Text style={styles.openLabel}>Map and details ›</Text>
+            <Row label={t('rides.distance')} value={distance(ride.distanceM)} />
+            <Row label={t('rides.ridingTime')} value={formatDuration(ride.movingSeconds)} />
+            <Row label={t('rides.topSpeed')} value={speed(ride.maxSpeedKmh)} />
+            <Text style={styles.openLabel}>{t('rides.mapAndDetails')}</Text>
           </Pressable>
           <View style={styles.actions}>
             <Action
-              label={exporting === ride.id ? 'Exporting…' : 'Export GPX'}
-              a11y={`Export ${defaultRideName(ride.startedAt)} as GPX`}
+              label={exporting === ride.id ? t('rides.exporting') : t('rides.exportGpx')}
+              a11y={t('rides.exportA11y', { name: rideName(ride.startedAt) })}
               disabled={exporting !== null}
               onPress={() => void onExport(ride)}
             />
             <Action
-              label="Delete"
-              a11y={`Delete ${defaultRideName(ride.startedAt)}`}
+              label={t('common.delete')}
+              a11y={t('rides.deleteA11y', { name: rideName(ride.startedAt) })}
               danger
               onPress={() => onDelete(ride)}
             />

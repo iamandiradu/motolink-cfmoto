@@ -6,12 +6,12 @@ import { ComponentRef, ReactNode, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TFunction, useT } from '../i18n';
 import type { LinkState } from '../protocol/session';
 import { colors } from '../ui/kit';
 import {
   OnboardingState,
   STEP_COUNT,
-  STEP_TITLES,
   StepId,
   isOnDashNetwork,
   nextStep,
@@ -20,6 +20,7 @@ import {
   resolveStep,
   shouldAutoAdvance,
   stepIndex,
+  stepTitle,
 } from './steps';
 import { Action, Status } from './ui';
 import { WifiHelper } from './WifiHelper';
@@ -45,6 +46,7 @@ export interface OnboardingProps {
 const AUTO_ADVANCE_MS = 1500;
 
 export function Onboarding(props: OnboardingProps) {
+  const t = useT();
   const [step, setStep] = useState<StepId>(() => resolveStep(props.initialStep));
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const headingRef = useRef<ComponentRef<typeof Text>>(null);
@@ -85,15 +87,16 @@ export function Onboarding(props: OnboardingProps) {
     const after = { hasBike, onDashNetwork, mirroring };
     previous.current = after;
     if (!shouldAutoAdvance(step, before, after)) return;
-    AccessibilityInfo.announceForAccessibility(`${successText(step)} Moving to the next step.`);
+    AccessibilityInfo.announceForAccessibility(t('onboarding.moving', { success: successText(t, step) }));
     const timer = setTimeout(() => goTo(nextStep(step)), AUTO_ADVANCE_MS);
     return () => clearTimeout(timer);
+    // t is left out on purpose: a language change must not re-announce or restart the timer.
   }, [step, hasBike, onDashNetwork, mirroring]);
 
   const index = stepIndex(step);
   const back = prevStep(step);
   const forward = nextStep(step);
-  const content = renderStep(step, props, state, goTo);
+  const content = renderStep(t, step, props, state, goTo);
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
@@ -103,13 +106,13 @@ export function Onboarding(props: OnboardingProps) {
             {progressLabel(step)}
           </Text>
           {forward ? (
-            <Action compact kind="quiet" label="Skip" accessibilityLabel="Skip setup" accessibilityHint="You can set up later from the Link tab" onPress={props.onSkip} />
+            <Action compact kind="quiet" label={t('onboarding.skip')} accessibilityLabel={t('onboarding.skipA11y')} accessibilityHint={t('onboarding.skipHint')} onPress={props.onSkip} />
           ) : null}
         </View>
         <View
           style={styles.track}
           accessibilityRole="progressbar"
-          accessibilityLabel="Setup progress"
+          accessibilityLabel={t('onboarding.progressA11y')}
           accessibilityValue={{ min: 1, max: STEP_COUNT, now: index + 1 }}>
           <View style={[styles.fill, { width: `${((index + 1) / STEP_COUNT) * 100}%` }]} />
         </View>
@@ -117,21 +120,21 @@ export function Onboarding(props: OnboardingProps) {
 
       <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
         <Text ref={headingRef} style={styles.heading} accessibilityRole="header">
-          {STEP_TITLES[step]}
+          {stepTitle(step)}
         </Text>
         {content.node}
       </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.footerSlot}>
-          {back ? <Action kind="plain" label="Back" accessibilityLabel={`Back to ${STEP_TITLES[back]}`} onPress={() => goTo(back)} /> : null}
+          {back ? <Action kind="plain" label={t('onboarding.back')} accessibilityLabel={t('onboarding.backTo', { step: stepTitle(back) })} onPress={() => goTo(back)} /> : null}
         </View>
         <View style={styles.footerSlot}>
           {forward ? (
             <Action
               kind={content.primaryInBody ? 'plain' : 'primary'}
-              label="Next"
-              accessibilityLabel={`Next: ${STEP_TITLES[forward]}`}
+              label={t('onboarding.next')}
+              accessibilityLabel={t('onboarding.nextTo', { step: stepTitle(forward) })}
               onPress={() => goTo(forward)}
             />
           ) : null}
@@ -141,16 +144,16 @@ export function Onboarding(props: OnboardingProps) {
   );
 }
 
-function successText(step: StepId): string {
+function successText(t: TFunction, step: StepId): string {
   switch (step) {
     case 'scan':
-      return 'QR code scanned.';
+      return t('onboarding.success.scan');
     case 'wifi':
-      return 'On the dash Wi-Fi.';
+      return t('onboarding.success.wifi');
     case 'mirror':
-      return 'Mirroring started.';
+      return t('onboarding.success.mirror');
     default:
-      return 'Done.';
+      return t('onboarding.success.done');
   }
 }
 
@@ -160,6 +163,7 @@ function Para({ children }: { children: ReactNode }) {
 
 /** Step bodies. `primaryInBody` tells the footer to make Next a plain button. */
 function renderStep(
+  t: TFunction,
   step: StepId,
   props: OnboardingProps,
   state: OnboardingState,
@@ -174,44 +178,44 @@ function renderStep(
     case 'about':
       return wrap(
         <View style={styles.block}>
-          <Para>MotoLink is not Apple CarPlay. It shows your phone screen on the dash, or its own ride pages.</Para>
-          <Para>Keep the phone screen on while you ride, or the dash picture stops.</Para>
+          <Para>{t('onboarding.about1')}</Para>
+          <Para>{t('onboarding.about2')}</Para>
         </View>,
         false,
       );
     case 'bluetooth':
       return wrap(
         <View style={styles.block}>
-          <Para>The handlebar buttons reach the phone over Bluetooth.</Para>
-          <Para>In iOS Settings, open Bluetooth and choose the bike while the dash shows its pairing screen.</Para>
-          <Action
-            label="Open Settings"
-            accessibilityHint="Opens the MotoLink page in iOS Settings. Tap Settings at the top left, then Bluetooth."
-            onPress={openSettings}
-          />
-          <Text style={styles.small}>This opens the MotoLink page. Tap Settings at the top left, then Bluetooth.</Text>
+          <Para>{t('onboarding.bt1')}</Para>
+          <Para>{t('onboarding.bt2')}</Para>
+          <Action label={t('onboarding.openSettings')} accessibilityHint={t('onboarding.openSettingsHint')} onPress={openSettings} />
+          <Text style={styles.small}>{t('onboarding.btSmall')}</Text>
         </View>,
         true,
       );
     case 'closeApp':
       return wrap(
         <View style={styles.block}>
-          <Para>The CFMOTO app uses the same connection to the dash, so only one app can use it.</Para>
-          <Para>Swipe up from the bottom of the screen and hold, then swipe the CFMOTO app away.</Para>
+          <Para>{t('onboarding.close1')}</Para>
+          <Para>{t('onboarding.close2')}</Para>
         </View>,
         false,
       );
     case 'scan':
       return wrap(
         <View style={styles.block}>
-          <Para>Switch the ignition on, open MotoPlay on the dash and go to the phone connection screen.</Para>
-          <Para>The QR code there holds the dash Wi-Fi name and password.</Para>
+          <Para>{t('onboarding.scan1')}</Para>
+          <Para>{t('onboarding.scan2')}</Para>
           {props.bike ? (
-            <Status ok>Scanned. Dash network: {props.bike.ssid}.</Status>
+            <Status ok>{t('onboarding.scanned', { ssid: props.bike.ssid })}</Status>
           ) : (
-            <Status ok={false}>Not scanned yet. You can continue and scan later from the Link tab.</Status>
+            <Status ok={false}>{t('onboarding.notScanned')}</Status>
           )}
-          <Action kind={props.bike ? 'plain' : 'primary'} label={props.bike ? 'Scan again' : 'Scan the dash QR'} onPress={props.onScan} />
+          <Action
+            kind={props.bike ? 'plain' : 'primary'}
+            label={props.bike ? t('onboarding.scanAgain') : t('onboarding.scanQr')}
+            onPress={props.onScan}
+          />
         </View>,
         !props.bike,
       );
@@ -219,15 +223,19 @@ function renderStep(
       if (!props.bike) {
         return wrap(
           <View style={styles.block}>
-            <Status ok={false}>Scan the dash QR first. It holds the network name and password.</Status>
-            <Action label="Go to scanning" accessibilityLabel={`Back to ${STEP_TITLES.scan}`} onPress={() => goTo('scan')} />
+            <Status ok={false}>{t('onboarding.scanFirst')}</Status>
+            <Action
+              label={t('onboarding.goScan')}
+              accessibilityLabel={t('onboarding.backTo', { step: stepTitle('scan') })}
+              onPress={() => goTo('scan')}
+            />
           </View>,
           true,
         );
       }
       return wrap(
         <View style={styles.block}>
-          <Para>Keep the ignition on so the dash Wi-Fi stays up.</Para>
+          <Para>{t('onboarding.wifiKeep')}</Para>
           <WifiHelper
             ssid={props.bike.ssid}
             password={props.bike.password}
@@ -240,23 +248,23 @@ function renderStep(
     case 'mirror':
       return wrap(
         <View style={styles.block}>
-          <Para>Tap Start mirroring, choose MotoLink, then Start Broadcast.</Para>
-          <Para>Turn the phone sideways so the picture fills the dash.</Para>
+          <Para>{t('onboarding.mirror1')}</Para>
+          <Para>{t('onboarding.mirror2')}</Para>
           {props.mirroring ? (
-            <Status ok>Mirroring is on.</Status>
+            <Status ok>{t('onboarding.mirrorOn')}</Status>
           ) : !state.onDashNetwork ? (
-            <Status ok={false}>The dash is not connected yet. You can start mirroring later from the Link tab.</Status>
+            <Status ok={false}>{t('onboarding.mirrorNotConnected')}</Status>
           ) : null}
-          {props.mirroring ? null : <Action label="Start mirroring" onPress={props.onStartMirroring} />}
+          {props.mirroring ? null : <Action label={t('onboarding.startMirroring')} onPress={props.onStartMirroring} />}
         </View>,
         !props.mirroring,
       );
     case 'done':
       return wrap(
         <View style={styles.block}>
-          <Para>Set what each handlebar button does in the Buttons tab.</Para>
-          <Para>You can change everything later in Settings.</Para>
-          <Action label="Finish" accessibilityHint="Closes setup" onPress={props.onFinish} />
+          <Para>{t('onboarding.done1')}</Para>
+          <Para>{t('onboarding.done2')}</Para>
+          <Action label={t('onboarding.finish')} accessibilityHint={t('onboarding.finishHint')} onPress={props.onFinish} />
         </View>,
         true,
       );

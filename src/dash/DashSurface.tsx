@@ -3,8 +3,9 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { DashSurfaceView } from '../../modules/moto-link';
 import { tapDashPage } from '../app-state/controller';
 import { useAppState } from '../app-state/store';
+import { useT } from '../i18n';
 import { colors } from '../ui/kit';
-import { PAGES, PAGE_TITLES } from './controller';
+import { PAGES, pageTitle } from './controller';
 import { DashScreen } from './DashScreen';
 
 /** Size used until a dash has stated its own. Matches the 5" CFMOTO panels. */
@@ -20,6 +21,7 @@ const DEFAULT_SIZE = { width: 800, height: 384 };
  * mounted: it is what the dash goes back to when mirroring stops.
  */
 export function DashSurface() {
+  const t = useT();
   const capture = useAppState((s) => s.link.capture);
   const mirroring = useAppState((s) => s.mirroring);
   const page = useAppState((s) => s.dash.page);
@@ -31,7 +33,7 @@ export function DashSurface() {
     <View>
       <View style={styles.caption}>
         <Text style={styles.captionText} accessibilityRole="header">
-          {mirroring ? 'Dash is showing your phone screen' : 'Dash preview'}
+          {mirroring ? t('dash.showingPhone') : t('dash.preview')}
         </Text>
       </View>
       {/* The tabs inside the picture are sized for the dash and come out tiny on
@@ -45,10 +47,10 @@ export function DashSurface() {
                 key={item}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`Dash page: ${PAGE_TITLES[item]}`}
+                accessibilityLabel={t('dash.pageA11y', { page: pageTitle(item) })}
                 onPress={() => tapDashPage(item)}
                 style={[styles.page, selected && styles.pageSelected]}>
-                <Text style={[styles.pageLabel, selected && styles.pageLabelSelected]}>{PAGE_TITLES[item]}</Text>
+                <Text style={[styles.pageLabel, selected && styles.pageLabelSelected]}>{pageTitle(item)}</Text>
               </Pressable>
             );
           })}
@@ -62,7 +64,7 @@ export function DashSurface() {
           backgroundColor: '#000',
         }}>
         <DashSurfaceView
-          label="Dash picture"
+          label={t('dash.pictureLabel')}
           style={{
             width: size.width,
             height: size.height,

@@ -8,6 +8,7 @@ import { useSyncExternalStore } from 'react';
 import type { Gesture, RawButtonEvent } from '../buttons/gestures';
 import { ButtonLayout, DEFAULT_LAYOUT, normaliseLayout } from '../buttons/mapping';
 import { DashState, DashTheme, INITIAL_DASH_STATE, THEMES } from '../dash/controller';
+import { LanguageSetting, isLanguageSetting, resolveLanguage, setLanguage } from '../i18n';
 import { EMPTY_METRICS, Metrics } from '../metrics/trip';
 import { MirrorPresets, PresetId, defaultPresets, isPresetId, normalisePresets } from '../mirror/presets';
 import type { StripEdge } from '../mirror/strip';
@@ -18,6 +19,8 @@ import { ComfortAlert, ComfortSettings, DEFAULT_COMFORT_SETTINGS, normalizeComfo
 import type { BikeProfile, LearnedBike, ProfileMatch } from '../bikes';
 
 export interface Settings {
+  /** App language. system follows the phone when it is one of ours, else English. */
+  language: LanguageSetting;
   /** Connect by itself when the app opens and a bike is saved. */
   autoConnect: boolean;
   /** off: buttons ignored. volume: rocker only, music keeps playing. full: rocker and media keys, music pauses. */
@@ -56,6 +59,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  language: 'system',
   autoConnect: true,
   buttonMode: 'volume',
   pinVolume: true,
@@ -188,12 +192,15 @@ function mergeSettings(stored: unknown): Settings {
     dismissedHints: Array.isArray(source.dismissedHints) ? source.dismissedHints : [],
     comfort: normalizeComfortSettings(source.comfort),
     dashTheme: THEMES.includes(source.dashTheme as DashTheme) ? (source.dashTheme as DashTheme) : DEFAULT_SETTINGS.dashTheme,
+    language: isLanguageSetting(source.language) ? source.language : DEFAULT_SETTINGS.language,
   };
 }
 
 export async function loadPersisted(): Promise<void> {
   const [bike, settings, layout] = await Promise.all([read(KEYS.bike), read(KEYS.settings), read(KEYS.layout)]);
   const merged = mergeSettings(settings);
+  // Before `loaded` flips, so the first screens already render in the rider's language.
+  setLanguage(resolveLanguage(merged.language));
   const validBike =
     bike && typeof bike === 'object' && typeof (bike as BikeCredentials).ssid === 'string'
       ? (bike as BikeCredentials)
@@ -214,6 +221,7 @@ export function saveBike(bike: BikeCredentials | null): void {
 
 export function saveSettings(patch: Partial<Settings>): void {
   const settings = { ...state.settings, ...patch };
+  if (patch.language !== undefined) setLanguage(resolveLanguage(settings.language));
   setState({ settings });
   write(KEYS.settings, settings);
 }

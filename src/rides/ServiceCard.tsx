@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { t as translateNow, useT } from '../i18n';
 import { Body, Button, Card, Label, Stepper, colors, confirm } from '../ui/kit';
 import { formatKm, KM_TO_MI } from './format';
 import { MAX_INTERVAL_KM, MAX_MANUAL_KM, MIN_INTERVAL_KM, type ServiceItemStatus, type ServiceStatus } from './service';
@@ -14,8 +15,32 @@ export interface ServiceCardProps {
   imperial?: boolean;
 }
 
-const STATUS_TEXT: Record<ServiceStatus, string> = { ok: 'OK', soon: 'Soon', due: 'Due' };
 const STATUS_COLOR: Record<ServiceStatus, string> = { ok: colors.ok, soon: colors.warn, due: colors.danger };
+
+/**
+ * The built-in items are stored with an English name; show them by id in the
+ * current language. Unknown ids keep the stored name.
+ */
+const ITEM_KEYS: Record<string, 'chainLube' | 'chainAdjust' | 'oil'> = {
+  'chain-lube': 'chainLube',
+  'chain-adjust': 'chainAdjust',
+  oil: 'oil',
+};
+
+function itemName(item: ServiceItemStatus): string {
+  const key = ITEM_KEYS[item.id];
+  return key ? translateNow(`service.items.${key}.name`) : item.name;
+}
+
+/** Whole label, per item, because some languages cannot just lower-case a name into the sentence. */
+function markDoneLabel(item: ServiceItemStatus): string {
+  const key = ITEM_KEYS[item.id];
+  return key
+    ? translateNow(`service.items.${key}.markDone`)
+    : translateNow('service.markDone', { item: item.name.toLowerCase() });
+}
+
+const statusText = (status: ServiceStatus) => translateNow(`service.status.${status}`);
 
 /** Parses "1,234.5" or "1234,5" typed on a phone keypad. NaN when it is not a number. */
 function parseNumber(text: string): number {
@@ -26,6 +51,7 @@ function parseNumber(text: string): number {
 }
 
 export function ServiceCard({ imperial = false }: ServiceCardProps) {
+  const t = useT();
   const { service, statuses, loaded, addDistance, setOdometer, markDone, setInterval } = useService();
   const [editing, setEditing] = useState(false);
   const [extra, setExtra] = useState('');
@@ -33,12 +59,12 @@ export function ServiceCard({ imperial = false }: ServiceCardProps) {
   const unit = imperial ? 'mi' : 'km';
   const toKm = (v: number) => (imperial ? v / KM_TO_MI : v);
   const fromKm = (km: number) => Math.round(imperial ? km * KM_TO_MI : km);
-  const fail = () => Alert.alert('Could not save', 'The phone storage did not accept the change.');
+  const fail = () => Alert.alert(t('service.saveFailedTitle'), t('service.saveFailedBody'));
 
   const onAdd = () => {
     const v = parseNumber(extra);
     if (!Number.isFinite(v) || v <= 0 || toKm(v) > MAX_MANUAL_KM) {
-      Alert.alert('Check the distance', `Enter the ${unit} ridden, for example 120.`);
+      Alert.alert(t('service.checkDistance'), t('service.checkDistanceBody', { unit }));
       return;
     }
     addDistance(toKm(v)).then(() => setExtra(''), fail);
@@ -47,43 +73,41 @@ export function ServiceCard({ imperial = false }: ServiceCardProps) {
   const onOdometer = () => {
     const v = parseNumber(odo);
     if (!Number.isFinite(v) || v < 0) {
-      Alert.alert('Check the odometer', `Enter the reading in ${unit}, for example 12500.`);
+      Alert.alert(t('service.checkOdometer'), t('service.checkOdometerBody', { unit }));
       return;
     }
     setOdometer(toKm(v)).then(() => setOdo(''), fail);
   };
 
   const onDone = (item: ServiceItemStatus) =>
-    confirm(`${item.name} done?`, `This sets it back to 0 ${unit}.`, 'Done', () => {
+    confirm(t('service.doneTitle', { item: itemName(item) }), t('service.doneBody', { unit }), t('common.done'), () => {
       markDone(item.id).catch(fail);
     });
 
   return (
-    <Card title="Service reminders" collapsible defaultOpen>
-      <Body dim>
-        These intervals are generic guesses, not CFMOTO&apos;s schedule. Follow your owner&apos;s manual and change them below.
-      </Body>
+    <Card title={t('service.title')} collapsible defaultOpen>
+      <Body dim>{t('service.disclaimer')}</Body>
 
-      {!loaded ? <Body dim>Loading…</Body> : null}
+      {!loaded ? <Body dim>{t('service.loading')}</Body> : null}
 
       {loaded
         ? statuses.map((item) => (
             <View key={item.id} style={styles.item}>
               <View style={styles.itemHeader} accessible accessibilityLabel={itemA11y(item, imperial)}>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemName}>{itemName(item)}</Text>
                 <View style={[styles.badge, { borderColor: STATUS_COLOR[item.status] }]}>
-                  <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] }]}>{STATUS_TEXT[item.status]}</Text>
+                  <Text style={[styles.badgeText, { color: STATUS_COLOR[item.status] }]}>{statusText(item.status)}</Text>
                 </View>
               </View>
               <Body dim>
-                {formatKm(item.kmSinceDone, imperial)} since done, every {formatKm(item.intervalKm, imperial)}.{' '}
+                {t('service.progress', { since: formatKm(item.kmSinceDone, imperial), interval: formatKm(item.intervalKm, imperial) })}{' '}
                 {item.remainingKm > 0
-                  ? `${formatKm(item.remainingKm, imperial)} to go.`
-                  : `${formatKm(-item.remainingKm, imperial)} overdue.`}
+                  ? t('service.toGo', { km: formatKm(item.remainingKm, imperial) })
+                  : t('service.overdue', { km: formatKm(-item.remainingKm, imperial) })}
               </Body>
               {editing ? (
                 <Stepper
-                  label="Every"
+                  label={t('service.every')}
                   value={fromKm(item.intervalKm)}
                   unit={` ${unit}`}
                   min={fromKm(MIN_INTERVAL_KM)}
@@ -94,52 +118,52 @@ export function ServiceCard({ imperial = false }: ServiceCardProps) {
                   }}
                 />
               ) : null}
-              <Button label={`Mark ${item.name.toLowerCase()} done`} kind="plain" onPress={() => onDone(item)} />
+              <Button label={markDoneLabel(item)} kind="plain" onPress={() => onDone(item)} />
             </View>
           ))
         : null}
 
-      <Button label={editing ? 'Finish changing intervals' : 'Change intervals'} kind="plain" onPress={() => setEditing(!editing)} />
+      <Button label={editing ? t('service.finishIntervals') : t('service.changeIntervals')} kind="plain" onPress={() => setEditing(!editing)} />
 
-      <Label>Rides you did not record</Label>
-      <Body dim>Recorded rides are added when you press Stop.</Body>
+      <Label>{t('service.unrecorded')}</Label>
+      <Body dim>{t('service.recordedAdded')}</Body>
       <View style={styles.inputRow}>
         <TextInput
           value={extra}
           onChangeText={setExtra}
-          placeholder={`Distance in ${unit}`}
+          placeholder={t('service.distancePlaceholder', { unit })}
           placeholderTextColor={colors.dim}
           keyboardType="decimal-pad"
-          accessibilityLabel={`Distance to add, in ${unit}`}
+          accessibilityLabel={t('service.distanceA11y', { unit })}
           returnKeyType="done"
           onSubmitEditing={onAdd}
           style={styles.input}
         />
         <View style={styles.inputButton}>
-          <Button label="Add" onPress={onAdd} disabled={!extra.trim()} />
+          <Button label={t('service.add')} onPress={onAdd} disabled={!extra.trim()} />
         </View>
       </View>
 
-      <Label>Bike odometer</Label>
+      <Label>{t('service.odometer')}</Label>
       <Body dim>
         {service.odometerKm === null
-          ? 'Not set. Enter the reading from the dash; later readings add the distance since.'
-          : `Last reading ${formatKm(service.odometerKm, imperial)}, plus recorded rides.`}
+          ? t('service.odometerNotSet')
+          : t('service.odometerLast', { km: formatKm(service.odometerKm, imperial) })}
       </Body>
       <View style={styles.inputRow}>
         <TextInput
           value={odo}
           onChangeText={setOdo}
-          placeholder={`Reading in ${unit}`}
+          placeholder={t('service.readingPlaceholder', { unit })}
           placeholderTextColor={colors.dim}
           keyboardType="number-pad"
-          accessibilityLabel={`Odometer reading, in ${unit}`}
+          accessibilityLabel={t('service.readingA11y', { unit })}
           returnKeyType="done"
           onSubmitEditing={onOdometer}
           style={styles.input}
         />
         <View style={styles.inputButton}>
-          <Button label="Set" onPress={onOdometer} disabled={!odo.trim()} />
+          <Button label={t('service.set')} onPress={onOdometer} disabled={!odo.trim()} />
         </View>
       </View>
     </Card>
@@ -147,7 +171,12 @@ export function ServiceCard({ imperial = false }: ServiceCardProps) {
 }
 
 function itemA11y(item: ServiceItemStatus, imperial: boolean): string {
-  return `${item.name}: ${STATUS_TEXT[item.status]}. ${formatKm(item.kmSinceDone, imperial)} since done, every ${formatKm(item.intervalKm, imperial)}.`;
+  return translateNow('service.itemA11y', {
+    item: itemName(item),
+    status: statusText(item.status),
+    since: formatKm(item.kmSinceDone, imperial),
+    interval: formatKm(item.intervalKm, imperial),
+  });
 }
 
 export default ServiceCard;

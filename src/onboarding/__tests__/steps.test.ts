@@ -1,7 +1,6 @@
 import {
   STEP_COUNT,
   STEP_IDS,
-  STEP_TITLES,
   OnboardingState,
   canAutoAdvance,
   isOnDashNetwork,
@@ -11,6 +10,7 @@ import {
   progressLabel,
   resolveStep,
   shouldAutoAdvance,
+  stepTitle,
 } from '../steps';
 
 const none: OnboardingState = { hasBike: false, onDashNetwork: false, mirroring: false };
@@ -20,7 +20,7 @@ describe('onboarding steps', () => {
   it('has seven steps in order, each with a title', () => {
     expect(STEP_IDS).toEqual(['about', 'bluetooth', 'closeApp', 'scan', 'wifi', 'mirror', 'done']);
     expect(STEP_COUNT).toBe(7);
-    for (const id of STEP_IDS) expect(STEP_TITLES[id].length).toBeGreaterThan(0);
+    for (const id of STEP_IDS) expect(stepTitle(id).length).toBeGreaterThan(0);
   });
 
   it('walks forward and back', () => {
