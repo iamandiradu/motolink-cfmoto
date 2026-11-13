@@ -43,7 +43,9 @@ final class LinkServer {
     let parameters = NWParameters(tls: nil, tcp: tcp)
     parameters.allowLocalEndpointReuse = true
     // The dash network has no internet; keep these sockets off cellular.
-    parameters.requiredInterfaceType = .wifi
+    // Prohibiting cellular, rather than requiring Wi-Fi, also lets the dash
+    // simulator on a computer reach the app over loopback or Ethernet.
+    parameters.prohibitedInterfaceTypes = [.cellular]
     return parameters
   }
 
