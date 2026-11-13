@@ -102,6 +102,14 @@ Both the app and the screen-mirroring extension are signed ([scripts/sign-ipa.sh
 
 A profile from a paid Apple Developer account can include the Hotspot Configuration capability, which lets the app join the dash Wi-Fi by itself. Without it, join the dash Wi-Fi once in iOS Settings; iOS remembers the network.
 
+## Supporting the project
+
+MotoLink is free. Donations are voluntary and unlock nothing; see [docs/DONATIONS.md](docs/DONATIONS.md) for how the in-app Support card is set up.
+
+## Languages
+
+English, Romanian, German, Italian and Spanish. The app follows the phone's language; change it in Settings.
+
 ## Credits
 
 The dash protocol was documented by the OpenCfMoto projects: [dcoletto/open-cfmoto](https://github.com/dcoletto/open-cfmoto), [zanderp/open-cfmoto](https://github.com/zanderp/open-cfmoto), [andpower/open-cfmoto-450nk](https://github.com/andpower/open-cfmoto-450nk), [keriman/k1_open-cfmoto](https://github.com/keriman/k1_open-cfmoto) and [ionutradu252/open-cflink](https://github.com/ionutradu252/open-cflink). MotoLink is a separate implementation and contains no code from them.

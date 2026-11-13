@@ -1,3 +1,4 @@
+import { SupportCards } from '../../support/SupportCards';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput } from 'react-native';
 
@@ -285,6 +286,8 @@ export default function SettingsScreen() {
           onPress={() => saveSettings({ onboardingDone: false, onboardingStep: null })}
         />
       </Card>
+
+      <SupportCards />
 
       <Card title={t('settings.log')} collapsible>
         <Text style={styles.log} selectable>

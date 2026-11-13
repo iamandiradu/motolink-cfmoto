@@ -834,6 +834,17 @@ export const ro: Strings = {
     notCompleted: 'Autentificarea Spotify nu s-a încheiat ({error}).',
     connectInSettings: 'Conectează Spotify în Setări.',
   },
+  support: {
+    title: "Susține MotoLink",
+    body: "MotoLink este gratuit și rămâne gratuit. Dacă îți e util, o donație ajută la plata contului de dezvoltator și a echipamentului de test. Nimic nu e blocat în spatele ei.",
+    thanks: "Mulțumesc că mergi cu el.",
+    couldNotOpen: "Linkul nu a putut fi deschis.",
+    aboutTitle: "Despre",
+    version: "Versiunea {version}",
+    notAffiliated: "MotoLink este un proiect independent. Nu este făcut, aprobat sau susținut de CFMOTO sau Carbit și nu este Apple CarPlay sau Android Auto.",
+    disclaimer: "Setează traseul înainte să pornești și ține ochii la drum. Nu te baza pe aplicație pentru nimic critic. O folosești pe propria răspundere.",
+    source: "Cod sursă",
+  },
   notify: {
     bikeTitle: 'Motocicletă conectată',
     bikeBody: 'Atinge ca să pui ecranul telefonului pe bord.',

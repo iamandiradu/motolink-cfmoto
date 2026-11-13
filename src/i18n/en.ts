@@ -830,6 +830,17 @@ export const en = {
     notCompleted: 'Spotify sign-in was not completed ({error}).',
     connectInSettings: 'Connect Spotify in Settings.',
   },
+  support: {
+    title: "Support MotoLink",
+    body: "MotoLink is free and stays free. If it is useful to you, a donation helps pay for the developer account and test hardware. Nothing is locked behind it.",
+    thanks: "Thank you for riding with it.",
+    couldNotOpen: "Could not open the link.",
+    aboutTitle: "About",
+    version: "Version {version}",
+    notAffiliated: "MotoLink is an independent project. It is not made, approved or supported by CFMOTO or Carbit, and it is not Apple CarPlay or Android Auto.",
+    disclaimer: "Set your route before you move and keep your eyes on the road. Do not rely on this app for anything critical. You use it at your own risk.",
+    source: "Source code",
+  },
   notify: {
     bikeTitle: 'Bike connected',
     bikeBody: 'Tap to put your phone screen on the dash.',

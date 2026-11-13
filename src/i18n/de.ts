@@ -826,6 +826,17 @@ export const de: Strings = {
     notCompleted: 'Die Spotify-Anmeldung wurde nicht abgeschlossen ({error}).',
     connectInSettings: 'Verbinde Spotify in den Einstellungen.',
   },
+  support: {
+    title: "MotoLink unterstützen",
+    body: "MotoLink ist kostenlos und bleibt es. Wenn es dir nützt, hilft eine Spende, das Entwicklerkonto und die Testhardware zu bezahlen. Nichts ist dahinter gesperrt.",
+    thanks: "Danke, dass du damit fährst.",
+    couldNotOpen: "Der Link ließ sich nicht öffnen.",
+    aboutTitle: "Über",
+    version: "Version {version}",
+    notAffiliated: "MotoLink ist ein unabhängiges Projekt. Es wird nicht von CFMOTO oder Carbit hergestellt, genehmigt oder unterstützt und ist weder Apple CarPlay noch Android Auto.",
+    disclaimer: "Stell die Route ein, bevor du losfährst, und behalte die Straße im Blick. Verlass dich bei nichts Wichtigem auf diese App. Du nutzt sie auf eigenes Risiko.",
+    source: "Quellcode",
+  },
   notify: {
     bikeTitle: 'Motorrad verbunden',
     bikeBody: 'Tippe, um deinen Handybildschirm aufs Display zu bringen.',
