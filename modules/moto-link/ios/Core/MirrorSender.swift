@@ -19,6 +19,7 @@ final class MirrorSender {
   private var parser = MirrorWire.Parser()
   private var encoder: VideoEncoder?
   private var lastScaled: CVPixelBuffer?
+  private var view = MirrorWire.View()
   private var lastEncodeAt: CFAbsoluteTime = 0
   private var minInterval: CFAbsoluteTime = 1.0 / 20.0
   private var failures = 0
@@ -84,25 +85,42 @@ final class MirrorSender {
     encoder.encode(lastScaled)
   }
 
-  /// Rotates the frame upright and fits it to the dash. A landscape screen
-  /// fills the dash (a sliver is cropped); a portrait screen is shown whole
-  /// between black bars.
-  private func scale(
+  /// Rotates the frame upright, cuts the trimmed edges, then places it on the
+  /// dash. By default a sideways screen fills the dash (a sliver is cropped)
+  /// and an upright screen is shown whole between black bars.
+  func scale(
     _ source: CVPixelBuffer,
     orientation: CGImagePropertyOrientation,
     config: VideoEncoder.Config,
-    encoder: VideoEncoder
+    encoder: VideoEncoder,
+    view: MirrorWire.View? = nil
   ) -> CVPixelBuffer? {
+    let view = view ?? self.view
     guard let target = encoder.makePixelBuffer() else { return nil }
     let bounds = CGRect(x: 0, y: 0, width: config.width, height: config.height)
 
     var image = CIImage(cvPixelBuffer: source).oriented(orientation)
+    let full = image.extent
+    // Core Image has its origin at the bottom left, so "top" is the high edge.
+    let kept = CGRect(
+      x: full.minX + full.width * CGFloat(view.trimLeft) / 1000,
+      y: full.minY + full.height * CGFloat(view.trimBottom) / 1000,
+      width: full.width * CGFloat(1000 - view.trimLeft - view.trimRight) / 1000,
+      height: full.height * CGFloat(1000 - view.trimTop - view.trimBottom) / 1000
+    )
+    image = image.cropped(to: kept)
     let size = image.extent.size
     guard size.width > 0, size.height > 0 else { return nil }
 
     let fitX = bounds.width / size.width
     let fitY = bounds.height / size.height
-    let factor = size.width >= size.height ? max(fitX, fitY) : min(fitX, fitY)
+    let fill: Bool
+    switch view.fit {
+    case .fill: fill = true
+    case .fit: fill = false
+    case .auto: fill = size.width >= size.height
+    }
+    let factor = (fill ? max(fitX, fitY) : min(fitX, fitY)) * CGFloat(view.zoom) / 1000
     image = image.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
     image = image.transformed(
       by: CGAffineTransform(
@@ -198,6 +216,12 @@ final class MirrorSender {
           completion: .contentProcessed { _ in }
         )
       }
+    case .view(let wanted):
+      lock.lock()
+      // Takes effect on the next screen frame. The source frame is not kept
+      // around to redraw: holding ReplayKit's buffers starves its pool.
+      view = wanted.sanitized
+      lock.unlock()
     case .keyframe:
       lock.lock()
       encoder?.requestKeyframe()

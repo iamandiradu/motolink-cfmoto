@@ -2,6 +2,8 @@
  * Wires the pieces together: link session, handlebar buttons, dash UI state
  * and metrics. Module-level singletons; the bike has one dash.
  */
+import { AppState } from 'react-native';
+
 import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DashAction, resolveAction } from '../buttons/mapping';
@@ -11,13 +13,16 @@ import { PhoneSensorSource } from '../metrics/phoneSensors';
 import { TripComputer } from '../metrics/trip';
 import { DEFAULT_IDENTITY } from '../protocol/control';
 import { LinkSession, LinkState } from '../protocol/session';
-import { appendLog, getState, loadPersisted, setState } from './store';
+import { bikeConnected, onBluetoothChange } from './autoStart';
+import { appendLog, getState, loadPersisted, saveSettings, setState } from './store';
 
 let session: LinkSession | null = null;
 let previousLinkState: LinkState = 'idle';
 let buttonSubscription: { remove(): void } | null = null;
 let logSubscription: { remove(): void } | null = null;
 let mirrorSubscription: { remove(): void } | null = null;
+let routeSubscription: { remove(): void } | null = null;
+let appStateSubscription: { remove(): void } | null = null;
 
 const trip = new TripComputer();
 const phoneSensors = new PhoneSensorSource();
@@ -95,6 +100,21 @@ export async function startMetrics(): Promise<void> {
   }
 }
 
+const FIT_CODE = { auto: 0, fill: 1, fit: 2 } as const;
+
+/** Sends the saved crop, zoom and fit to the broadcast extension. */
+export function applyMirrorView(): void {
+  const view = getState().settings.mirrorView;
+  MotoLink.setMirrorView({
+    zoom: view.zoom * 10,
+    trimTop: view.trimTop * 10,
+    trimBottom: view.trimBottom * 10,
+    trimLeft: view.trimLeft * 10,
+    trimRight: view.trimRight * 10,
+    fit: FIT_CODE[view.fit],
+  });
+}
+
 /** Opens the iOS sheet that starts or stops mirroring the phone screen. */
 export function toggleMirroring(): void {
   void MotoLink.showBroadcastPicker().catch((error) => appendLog(`mirroring: ${String(error)}`));
@@ -137,6 +157,40 @@ export async function disconnect(): Promise<void> {
   previousLinkState = 'idle';
 }
 
+/** Set when the bike connected while the app was in the background. */
+let pickerDue = false;
+
+function onBluetoothOutputs(current: string[]): void {
+  const state = getState();
+  const steps = onBluetoothChange({
+    bike: state.settings.bikeBluetooth,
+    enabled: state.settings.autoStart,
+    previous: state.bluetoothOutputs,
+    current,
+    mirroring: state.mirroring,
+    appActive: AppState.currentState === 'active',
+  });
+  setState({ bluetoothOutputs: current });
+
+  for (const step of steps) {
+    if (step === 'connect') {
+      appendLog('bike Bluetooth connected');
+      if (state.bike && state.link.state === 'idle') connect();
+    } else if (step === 'showPicker') {
+      toggleMirroring();
+    } else {
+      pickerDue = true;
+      void MotoLink.notify('Bike connected', 'Tap to put your phone screen on the dash.').catch(() => undefined);
+    }
+  }
+}
+
+/** Marks a connected Bluetooth device as the bike, or clears it with null. */
+export function setBikeBluetooth(name: string | null): void {
+  saveSettings({ bikeBluetooth: name });
+  if (name) void MotoLink.requestNotificationPermission().catch(() => undefined);
+}
+
 /** Called once when the app starts. */
 export async function bootstrap(): Promise<void> {
   await loadPersisted();
@@ -149,8 +203,19 @@ export async function bootstrap(): Promise<void> {
     setState({ mirroring: event.active });
     appendLog(event.active ? 'screen mirroring started' : 'screen mirroring stopped');
   });
-  setState({ mirroring: MotoLink.isMirroring() });
+  setState({ mirroring: MotoLink.isMirroring(), bluetoothOutputs: MotoLink.getBluetoothOutputs() });
+  routeSubscription?.remove();
+  routeSubscription = MotoLink.addListener('onAudioRoute', (event) => onBluetoothOutputs(event.outputs));
+  appStateSubscription?.remove();
+  appStateSubscription = AppState.addEventListener('change', (next) => {
+    if (next !== 'active' || !pickerDue) return;
+    pickerDue = false;
+    const now = getState();
+    // The rider came back from the notification: bring up the Start Broadcast sheet.
+    if (!now.mirroring && bikeConnected(now.settings.bikeBluetooth, now.bluetoothOutputs)) toggleMirroring();
+  });
   await applyButtonMode();
+  applyMirrorView();
   void startMetrics();
   const { bike, settings } = getState();
   if (bike && settings.autoConnect) connect();

@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { connect, disconnect, toggleMirroring } from '../../app-state/controller';
-import { dismissHint, saveBike, useAppState } from '../../app-state/store';
+import { applyMirrorView, connect, disconnect, toggleMirroring } from '../../app-state/controller';
+import { DEFAULT_MIRROR_VIEW, MirrorView, dismissHint, saveBike, saveSettings, useAppState } from '../../app-state/store';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
-import { Body, Button, Card, Hint, Row, Screen, colors } from '../../ui/kit';
+import { Body, Button, Card, Choice, Hint, Row, Screen, Stepper, colors } from '../../ui/kit';
 
 const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string }> = {
   idle: { title: 'Not connected', hint: 'Tap Connect with the bike switched on.', color: colors.dim },
@@ -27,6 +27,71 @@ const NAV_APPS = [
   { label: 'Google Maps', url: 'comgooglemaps://' },
   { label: 'Waze', url: 'waze://' },
 ] as const;
+
+const FIT_TEXT: Record<MirrorView['fit'], string> = {
+  auto: 'A sideways phone fills the dash. An upright phone is shown whole, with bars at the sides.',
+  fill: 'Always fills the dash. The edges that do not fit are cut off.',
+  fit: 'Always shows the whole screen. Bars appear where it does not reach.',
+};
+
+/** Crop, zoom and fit of the mirrored picture. Changes apply while mirroring. */
+function MirrorAdjust() {
+  const view = useAppState((s) => s.settings.mirrorView);
+  const [open, setOpen] = useState(false);
+  const changed = (Object.keys(DEFAULT_MIRROR_VIEW) as (keyof MirrorView)[]).some(
+    (key) => view[key] !== DEFAULT_MIRROR_VIEW[key],
+  );
+
+  const update = (patch: Partial<MirrorView>) => {
+    saveSettings({ mirrorView: { ...view, ...patch } });
+    applyMirrorView();
+  };
+  const trim = (label: string, key: 'trimTop' | 'trimBottom' | 'trimLeft' | 'trimRight') => (
+    <Stepper label={label} value={view[key]} unit="%" min={0} max={40} step={2} onChange={(value) => update({ [key]: value })} />
+  );
+
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+        style={styles.adjustHeader}>
+        <Text style={styles.adjustTitle}>Adjust the picture{changed ? ' (changed)' : ''}</Text>
+        <Text style={styles.adjustChevron}>{open ? '▾' : '›'}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.adjustBody}>
+          <Choice
+            value={view.fit}
+            onChange={(fit) => update({ fit })}
+            options={[
+              { value: 'auto', label: 'Automatic' },
+              { value: 'fill', label: 'Fill' },
+              { value: 'fit', label: 'Whole screen' },
+            ]}
+          />
+          <Body dim>{FIT_TEXT[view.fit]}</Body>
+          <Stepper label="Zoom" value={view.zoom} unit="%" min={100} max={250} step={10} onChange={(zoom) => update({ zoom })} />
+          <Body dim>Cut edges, to hide the status bar or an app&apos;s buttons. Sides are those of the picture as you see it.</Body>
+          {trim('Cut top', 'trimTop')}
+          {trim('Cut bottom', 'trimBottom')}
+          {trim('Cut left', 'trimLeft')}
+          {trim('Cut right', 'trimRight')}
+          <Button
+            label="Reset picture"
+            kind="plain"
+            disabled={!changed}
+            onPress={() => {
+              saveSettings({ mirrorView: DEFAULT_MIRROR_VIEW });
+              applyMirrorView();
+            }}
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 function MirrorCard({ mirroring }: { mirroring: boolean }) {
   const [missing, setMissing] = useState<string | null>(null);
@@ -64,6 +129,7 @@ function MirrorCard({ mirroring }: { mirroring: boolean }) {
           {missing ? <Text style={styles.error}>{missing} is not installed on this phone.</Text> : null}
         </>
       ) : null}
+      <MirrorAdjust />
     </Card>
   );
 }
@@ -184,5 +250,9 @@ const styles = StyleSheet.create({
   },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   apps: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  adjustHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  adjustTitle: { color: colors.text, fontSize: 16, fontWeight: '600', flex: 1 },
+  adjustChevron: { color: colors.dim, fontSize: 18, width: 16, textAlign: 'center' },
+  adjustBody: { gap: 10 },
   app: { flexGrow: 1 },
 });

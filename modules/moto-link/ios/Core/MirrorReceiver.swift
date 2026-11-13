@@ -13,6 +13,7 @@ final class MirrorReceiver {
   private var connection: NWConnection?
   private var parser = MirrorWire.Parser()
   private var config: MirrorWire.Config?
+  private var view = MirrorWire.View()
 
   func start() {
     queue.async {
@@ -50,6 +51,14 @@ final class MirrorReceiver {
     }
   }
 
+  /// Crop, zoom and fit of the mirrored picture. Applies at once.
+  func setView(_ view: MirrorWire.View) {
+    queue.async {
+      self.view = view.sanitized
+      self.send(.view(self.view))
+    }
+  }
+
   func requestKeyframe() {
     queue.async {
       self.send(.keyframe)
@@ -70,6 +79,7 @@ final class MirrorReceiver {
       guard let self else { return }
       switch state {
       case .ready:
+        self.send(.view(self.view))
         if let config = self.config { self.send(.config(config)) }
         self.onConnected?()
         self.read(incoming)

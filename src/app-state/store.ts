@@ -25,9 +25,36 @@ export interface Settings {
   /** 0 for older dashes, 128 for newer ones. Change it if the dash connects but never shows a picture. */
   supportFunction: 0 | 128;
   units: 'metric' | 'imperial';
+  /** Bluetooth name of the bike, as iOS lists it. null until the rider picks it. */
+  bikeBluetooth: string | null;
+  /** Offer mirroring as soon as that Bluetooth device connects. */
+  autoStart: boolean;
+  /** Mirrored picture: zoom and edge trims in percent, and how it is fitted to the dash. */
+  mirrorView: MirrorView;
   /** Ids of explanation cards the rider has closed. */
   dismissedHints: string[];
 }
+
+export interface MirrorView {
+  /** 100 = no zoom. */
+  zoom: number;
+  /** Percent cut from each edge of the upright picture. */
+  trimTop: number;
+  trimBottom: number;
+  trimLeft: number;
+  trimRight: number;
+  /** auto: a sideways screen fills the dash, an upright one is shown whole. */
+  fit: 'auto' | 'fill' | 'fit';
+}
+
+export const DEFAULT_MIRROR_VIEW: MirrorView = {
+  zoom: 100,
+  trimTop: 0,
+  trimBottom: 0,
+  trimLeft: 0,
+  trimRight: 0,
+  fit: 'auto',
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   autoConnect: true,
@@ -37,6 +64,9 @@ export const DEFAULT_SETTINGS: Settings = {
   identityOs: 'Android',
   supportFunction: 0,
   units: 'metric',
+  bikeBluetooth: null,
+  autoStart: true,
+  mirrorView: DEFAULT_MIRROR_VIEW,
   dismissedHints: [],
 };
 
@@ -53,6 +83,8 @@ export interface AppState {
   lastButton: { raw: RawButtonEvent; gesture: Gesture | null; at: number } | null;
   /** The phone screen is being mirrored to the dash instead of the app's own picture. */
   mirroring: boolean;
+  /** Bluetooth audio devices the phone is connected to right now. */
+  bluetoothOutputs: string[];
 }
 
 const IDLE_LINK: SessionSnapshot = {
@@ -75,6 +107,7 @@ let state: AppState = {
   logs: [],
   lastButton: null,
   mirroring: false,
+  bluetoothOutputs: [],
 };
 
 const listeners = new Set<() => void>();
@@ -120,6 +153,16 @@ function write(key: string, value: unknown): void {
   job.catch(() => undefined);
 }
 
+function mergeSettings(stored: unknown): Settings {
+  const source = stored && typeof stored === 'object' ? (stored as Partial<Settings>) : {};
+  return {
+    ...DEFAULT_SETTINGS,
+    ...source,
+    mirrorView: { ...DEFAULT_MIRROR_VIEW, ...(source.mirrorView ?? {}) },
+    dismissedHints: Array.isArray(source.dismissedHints) ? source.dismissedHints : [],
+  };
+}
+
 export async function loadPersisted(): Promise<void> {
   const [bike, settings, layout] = await Promise.all([read(KEYS.bike), read(KEYS.settings), read(KEYS.layout)]);
   const validBike =
@@ -129,7 +172,7 @@ export async function loadPersisted(): Promise<void> {
   setState({
     loaded: true,
     bike: validBike,
-    settings: { ...DEFAULT_SETTINGS, ...(settings && typeof settings === 'object' ? settings : {}) },
+    settings: mergeSettings(settings),
     layout: normaliseLayout(layout),
   });
 }

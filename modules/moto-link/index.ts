@@ -17,6 +17,7 @@ type MotoLinkEvents = {
   onButton: (event: NativeButtonEvent) => void;
   onLog: (event: { message: string }) => void;
   onMirrorState: (event: { active: boolean }) => void;
+  onAudioRoute: (event: { outputs: string[] }) => void;
 };
 
 declare class MotoLinkNativeModule extends NativeModule<MotoLinkEvents> {
@@ -42,7 +43,19 @@ declare class MotoLinkNativeModule extends NativeModule<MotoLinkEvents> {
   stopButtonCapture(): Promise<void>;
   reannounceButtons(): Promise<void>;
   isMirroring(): boolean;
+  getBluetoothOutputs(): string[];
+  requestNotificationPermission(): Promise<boolean>;
+  notify(title: string, body: string): Promise<void>;
   showBroadcastPicker(): Promise<void>;
+  /** Thousandths: zoom 1000 = 1x, trimTop 60 = cut top 6 %. fit: 0 auto, 1 fill, 2 fit. */
+  setMirrorView(view: {
+    zoom: number;
+    trimTop: number;
+    trimBottom: number;
+    trimLeft: number;
+    trimRight: number;
+    fit: number;
+  }): void;
 }
 
 export const MotoLink = requireNativeModule<MotoLinkNativeModule>('MotoLink');

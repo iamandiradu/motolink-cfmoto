@@ -74,15 +74,16 @@ Every merge to `master` runs [.github/workflows/build-ipa.yml](.github/workflows
 
 By default the `.ipa` is **unsigned**. Install it with a tool that signs with your Apple ID, such as AltStore or Sideloadly.
 
-To get a signed `.ipa` from CI, add three repository secrets:
+To get a signed `.ipa` from CI, add four repository secrets:
 
 | Secret | Content |
 | --- | --- |
 | `IOS_CERTIFICATE_P12_BASE64` | base64 of your signing certificate `.p12` |
 | `IOS_CERTIFICATE_PASSWORD` | password of that `.p12` |
 | `IOS_PROVISIONING_PROFILE_BASE64` | base64 of a provisioning profile for `com.iamandiradu.motolink` |
+| `IOS_BROADCAST_PROFILE_BASE64` | base64 of a provisioning profile for `com.iamandiradu.motolink.broadcast` |
 
-The signing step covers the app only, not the screen-mirroring extension inside it, so a CI-signed build cannot mirror yet. Building from Xcode signs both.
+Both the app and the screen-mirroring extension are signed ([scripts/sign-ipa.sh](scripts/sign-ipa.sh)). The profiles must list your iPhone. This needs a paid Apple Developer account: profiles from a free Apple ID last 7 days, which makes a CI build pointless.
 
 A profile from a paid Apple Developer account can include the Hotspot Configuration capability, which lets the app join the dash Wi-Fi by itself. Without it, join the dash Wi-Fi once in iOS Settings; iOS remembers the network.
 

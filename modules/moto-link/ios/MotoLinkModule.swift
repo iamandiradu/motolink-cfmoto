@@ -1,7 +1,9 @@
+import AVFoundation
 import ExpoModulesCore
 import NetworkExtension
 import ReplayKit
 import UIKit
+import UserNotifications
 
 /// Thin native transport for the dash link. Protocol decisions live in
 /// TypeScript (src/protocol); this side owns what JavaScript cannot do well:
@@ -32,7 +34,7 @@ public class MotoLinkModule: Module {
   public func definition() -> ModuleDefinition {
     Name("MotoLink")
 
-    Events("onConnectionOpen", "onConnectionData", "onConnectionClose", "onVideoStats", "onButton", "onLog", "onMirrorState")
+    Events("onConnectionOpen", "onConnectionData", "onConnectionClose", "onVideoStats", "onButton", "onLog", "onMirrorState", "onAudioRoute")
 
     OnCreate {
       self.frames.onNeedKeyframe = { [weak self] in
@@ -54,6 +56,14 @@ public class MotoLinkModule: Module {
         self?.setMirroring(false)
       }
       self.mirror.start()
+      // The bike's Bluetooth shows up as an audio output; that is the cue to offer mirroring.
+      self.routeObserver = NotificationCenter.default.addObserver(
+        forName: AVAudioSession.routeChangeNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.sendEvent("onAudioRoute", ["outputs": MotoLinkModule.bluetoothOutputs()])
+      }
     }
 
     OnDestroy {
@@ -61,6 +71,9 @@ public class MotoLinkModule: Module {
       self.server.stop()
       self.buttons.stop()
       self.mirror.stop()
+      if let observer = self.routeObserver {
+        NotificationCenter.default.removeObserver(observer)
+      }
     }
 
     // MARK: Network
@@ -197,10 +210,46 @@ public class MotoLinkModule: Module {
       self.buttons.reannounce()
     }.runOnQueue(.main)
 
+    // MARK: Bike Bluetooth and notifications
+
+    /// Names of the Bluetooth audio devices the phone is playing to right now.
+    Function("getBluetoothOutputs") { () -> [String] in
+      MotoLinkModule.bluetoothOutputs()
+    }
+
+    AsyncFunction("requestNotificationPermission") { (promise: Promise) in
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        promise.resolve(granted)
+      }
+    }
+
+    /// Shows a notification now. Used when the bike connects while the app is in the background.
+    AsyncFunction("notify") { (title: String, body: String) in
+      let content = UNMutableNotificationContent()
+      content.title = title
+      content.body = body
+      content.sound = .default
+      let request = UNNotificationRequest(identifier: "motolink.bike", content: content, trigger: nil)
+      try await UNUserNotificationCenter.current().add(request)
+    }
+
     // MARK: Screen mirroring
 
     Function("isMirroring") { () -> Bool in
       self.isMirroring
+    }
+
+    /// Crop, zoom and fit of the mirrored picture; thousandths, see MirrorWire.View.
+    Function("setMirrorView") { (view: [String: Int]) in
+      self.mirror.setView(
+        MirrorWire.View(
+          zoom: view["zoom"] ?? 1000,
+          trimTop: view["trimTop"] ?? 0,
+          trimBottom: view["trimBottom"] ?? 0,
+          trimLeft: view["trimLeft"] ?? 0,
+          trimRight: view["trimRight"] ?? 0,
+          fit: MirrorWire.View.Fit(rawValue: UInt32(clamping: view["fit"] ?? 0)) ?? .auto
+        ))
     }
 
     /// Opens the iOS "Screen Broadcast" sheet with this app's extension preselected.
@@ -220,6 +269,15 @@ public class MotoLinkModule: Module {
         view.accessibilityLabel = value
       }
     }
+  }
+
+  private var routeObserver: NSObjectProtocol?
+
+  private static func bluetoothOutputs() -> [String] {
+    let bluetooth: Set<AVAudioSession.Port> = [.bluetoothA2DP, .bluetoothHFP, .bluetoothLE]
+    return AVAudioSession.sharedInstance().currentRoute.outputs
+      .filter { bluetooth.contains($0.portType) }
+      .map { $0.portName }
   }
 
   private func setMirroring(_ active: Bool) {

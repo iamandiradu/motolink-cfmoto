@@ -110,6 +110,40 @@ export function Choice<T extends string | number>(props: {
   );
 }
 
+/** A number changed in fixed steps with two large buttons. */
+export function Stepper(props: {
+  label: string;
+  value: number;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  const set = (next: number) => props.onChange(Math.min(props.max, Math.max(props.min, next)));
+  const button = (glyph: string, name: string, next: number, disabled: boolean) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${name} ${props.label}`}
+      disabled={disabled}
+      onPress={() => set(next)}
+      style={[styles.stepButton, disabled && { opacity: 0.35 }]}>
+      <Text style={styles.stepGlyph}>{glyph}</Text>
+    </Pressable>
+  );
+  return (
+    <View style={styles.stepper}>
+      <Text style={styles.stepLabel}>{props.label}</Text>
+      {button('−', 'Decrease', props.value - props.step, props.value <= props.min)}
+      <Text style={styles.stepValue}>
+        {props.value}
+        {props.unit}
+      </Text>
+      {button('+', 'Increase', props.value + props.step, props.value >= props.max)}
+    </View>
+  );
+}
+
 export function Row({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.row}>
@@ -144,6 +178,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   choiceLabel: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 },
+  stepLabel: { color: colors.text, fontSize: 16, flex: 1 },
+  stepButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepGlyph: { color: colors.text, fontSize: 22, fontWeight: '600' },
+  stepValue: { color: colors.text, fontSize: 16, fontWeight: '700', width: 64, textAlign: 'center', fontVariant: ['tabular-nums'] },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 4 },
   rowLabel: { color: colors.dim, fontSize: 15 },
   rowValue: { color: colors.text, fontSize: 15, fontWeight: '600', flexShrink: 1, textAlign: 'right' },

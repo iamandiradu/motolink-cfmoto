@@ -1,6 +1,6 @@
 import { StyleSheet, Text } from 'react-native';
 
-import { dispatchDashAction } from '../../app-state/controller';
+import { dispatchDashAction, setBikeBluetooth } from '../../app-state/controller';
 import { restoreHints, saveSettings, setState, useAppState } from '../../app-state/store';
 import { Body, Button, Card, Choice, Screen, colors } from '../../ui/kit';
 
@@ -8,6 +8,8 @@ export default function SettingsScreen() {
   const settings = useAppState((s) => s.settings);
   const theme = useAppState((s) => s.dash.theme);
   const logs = useAppState((s) => s.logs);
+  const outputs = useAppState((s) => s.bluetoothOutputs);
+  const candidate = outputs.find((name) => name !== settings.bikeBluetooth) ?? null;
 
   return (
     <Screen>
@@ -21,6 +23,45 @@ export default function SettingsScreen() {
             { value: 'off', label: 'Manual' },
           ]}
         />
+      </Card>
+
+      <Card title="Start when the bike connects">
+        {settings.bikeBluetooth ? (
+          <>
+            <Body>
+              Bike Bluetooth: {settings.bikeBluetooth}
+              {outputs.includes(settings.bikeBluetooth) ? ' (connected now)' : ''}
+            </Body>
+            <Choice
+              value={settings.autoStart ? 'on' : 'off'}
+              onChange={(value) => saveSettings({ autoStart: value === 'on' })}
+              options={[
+                { value: 'on', label: 'Offer mirroring' },
+                { value: 'off', label: 'Do nothing' },
+              ]}
+            />
+            <Body dim>
+              When this Bluetooth device connects, the app looks for the dash and brings up Start Broadcast. If the
+              app is in the background you get a notification instead. iOS requires your tap to start mirroring, and
+              the app must already be open in the background.
+            </Body>
+            <Button label="Forget this Bluetooth device" kind="plain" onPress={() => setBikeBluetooth(null)} />
+          </>
+        ) : (
+          <Body dim>
+            Connect the phone to the bike over Bluetooth, then come back here and choose it. The app will then offer
+            mirroring each time the bike connects.
+          </Body>
+        )}
+        {candidate ? (
+          <Button
+            label={`Use "${candidate}" as my bike`}
+            kind={settings.bikeBluetooth ? 'plain' : 'primary'}
+            onPress={() => setBikeBluetooth(candidate)}
+          />
+        ) : !settings.bikeBluetooth ? (
+          <Body dim>No Bluetooth audio device is connected right now.</Body>
+        ) : null}
       </Card>
 
       <Card title="Dash picture">

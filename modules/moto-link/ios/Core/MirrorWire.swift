@@ -8,6 +8,7 @@ import Foundation
 ///
 ///   app -> extension   config    [1][w i32][h i32][fps i32][bitrate i32][keyframeSec i32]
 ///   app -> extension   keyframe  [2]
+///   app -> extension   view      [4][zoom][trimTop][trimBottom][trimLeft][trimRight][fit], each u32
 ///   extension -> app   frame     [3][flags u8, bit0 = keyframe][length u32][Annex-B access unit]
 ///
 /// All integers little-endian. This file is compiled into both targets.
@@ -22,8 +23,42 @@ enum MirrorWire {
     var keyframeIntervalSec: Int
   }
 
+  /// How the phone screen is placed on the dash. Trims and zoom are in
+  /// thousandths: trimTop 60 cuts the top 6 % of the upright screen, zoom 1250
+  /// enlarges by a quarter.
+  struct View: Equatable {
+    enum Fit: UInt32 {
+      /// Sideways screen fills the dash, upright screen is shown whole.
+      case auto = 0
+      /// Always fill the dash; edges may be cut.
+      case fill = 1
+      /// Always show everything; bars may appear.
+      case fit = 2
+    }
+
+    var zoom = 1000
+    var trimTop = 0
+    var trimBottom = 0
+    var trimLeft = 0
+    var trimRight = 0
+    var fit = Fit.auto
+
+    /// Values an arbitrary sender could not use to produce an empty picture.
+    var sanitized: View {
+      func trim(_ value: Int) -> Int { min(max(value, 0), 400) }
+      var out = self
+      out.zoom = min(max(zoom, 1000), 3000)
+      out.trimTop = trim(trimTop)
+      out.trimBottom = trim(trimBottom)
+      out.trimLeft = trim(trimLeft)
+      out.trimRight = trim(trimRight)
+      return out
+    }
+  }
+
   enum Message: Equatable {
     case config(Config)
+    case view(View)
     case keyframe
     case frame(data: Data, isKeyframe: Bool)
   }
@@ -31,6 +66,7 @@ enum MirrorWire {
   private static let typeConfig: UInt8 = 1
   private static let typeKeyframe: UInt8 = 2
   private static let typeFrame: UInt8 = 3
+  private static let typeView: UInt8 = 4
   /// Refuse absurd lengths so a corrupt stream cannot exhaust memory.
   private static let maxFrame = 4 * 1024 * 1024
 
@@ -42,6 +78,12 @@ enum MirrorWire {
       for value in [config.width, config.height, config.fps, config.bitrate, config.keyframeIntervalSec] {
         append(UInt32(clamping: value), to: &out)
       }
+    case .view(let view):
+      out.append(typeView)
+      for value in [view.zoom, view.trimTop, view.trimBottom, view.trimLeft, view.trimRight] {
+        append(UInt32(clamping: value), to: &out)
+      }
+      append(view.fit.rawValue, to: &out)
     case .keyframe:
       out.append(typeKeyframe)
     case .frame(let data, let isKeyframe):
@@ -92,6 +134,20 @@ enum MirrorWire {
         case MirrorWire.typeKeyframe:
           messages.append(.keyframe)
           offset += 1
+        case MirrorWire.typeView:
+          guard buffer.count - offset >= 25 else { break parse }
+          let base = offset + 1
+          messages.append(
+            .view(
+              View(
+                zoom: u32(base),
+                trimTop: u32(base + 4),
+                trimBottom: u32(base + 8),
+                trimLeft: u32(base + 12),
+                trimRight: u32(base + 16),
+                fit: View.Fit(rawValue: UInt32(u32(base + 20))) ?? .auto
+              ).sanitized))
+          offset += 25
         case MirrorWire.typeFrame:
           guard buffer.count - offset >= 6 else { break parse }
           let length = u32(offset + 2)

@@ -1,7 +1,42 @@
+import { onBluetoothChange } from '../app-state/autoStart';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DEFAULT_LAYOUT, isDefaultLayout, normaliseLayout, resolveAction, setMapping } from '../buttons/mapping';
 import { INITIAL_DASH_STATE, dashReducer, showPage, tapItem } from '../dash/controller';
 import { TripComputer, compassPoint, formatClock, formatDuration, gpsQuality, haversineM } from '../metrics/trip';
+
+describe('auto-start on bike Bluetooth', () => {
+  const base = {
+    bike: 'CFMOTO-BT',
+    enabled: true,
+    previous: [] as string[],
+    current: ['CFMOTO-BT'],
+    mirroring: false,
+    appActive: true,
+  };
+
+  it('opens the broadcast sheet when the bike connects and the app is in front', () => {
+    expect(onBluetoothChange(base)).toEqual(['connect', 'showPicker']);
+  });
+
+  it('notifies instead when the app is in the background', () => {
+    expect(onBluetoothChange({ ...base, appActive: false })).toEqual(['connect', 'notify']);
+  });
+
+  it('does not ask again while already mirroring', () => {
+    expect(onBluetoothChange({ ...base, mirroring: true })).toEqual(['connect']);
+  });
+
+  it('reacts only to the bike appearing, not to other devices or repeats', () => {
+    expect(onBluetoothChange({ ...base, current: ['Helmet'] })).toEqual([]);
+    expect(onBluetoothChange({ ...base, previous: ['CFMOTO-BT'], current: ['CFMOTO-BT', 'Helmet'] })).toEqual([]);
+    expect(onBluetoothChange({ ...base, previous: ['CFMOTO-BT'], current: [] })).toEqual([]);
+  });
+
+  it('stays quiet when switched off or no bike is chosen', () => {
+    expect(onBluetoothChange({ ...base, enabled: false })).toEqual([]);
+    expect(onBluetoothChange({ ...base, bike: null })).toEqual([]);
+  });
+});
 
 describe('GestureDetector', () => {
   function setup(wantsDouble = false) {
