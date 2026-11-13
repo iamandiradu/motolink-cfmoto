@@ -15,11 +15,11 @@
         "NSLocationWhenInUseUsageDescription": "MotoLink uses your location for speed, heading, trip distance and the map on the dash.",
         "NSMotionUsageDescription": "MotoLink uses motion sensors to show lean angle.",
         "NSCameraUsageDescription": "MotoLink uses the camera to scan the pairing QR code on the dash.",
-        "UIBackgroundModes": ["audio", "location"],
+        "UIBackgroundModes": [
+          "audio",
+          "location"
+        ],
         "ITSAppUsesNonExemptEncryption": false
-      },
-      "entitlements": {
-        "com.apple.developer.networking.HotspotConfiguration": true
       }
     },
     "plugins": [
