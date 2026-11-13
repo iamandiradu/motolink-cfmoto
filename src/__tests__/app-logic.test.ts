@@ -1,8 +1,18 @@
 import { onBluetoothChange } from '../app-state/autoStart';
+import { activityLink, activityState, shouldShowActivity } from '../app-state/liveActivity';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DEFAULT_LAYOUT, isDefaultLayout, normaliseLayout, resolveAction, setMapping } from '../buttons/mapping';
 import { INITIAL_DASH_STATE, dashReducer, showPage, tapItem } from '../dash/controller';
-import { TripComputer, compassPoint, formatClock, formatDuration, gpsQuality, haversineM } from '../metrics/trip';
+import { LeanEstimator, MotionSample, turnRateAroundVertical } from '../metrics/lean';
+import {
+  TripComputer,
+  compassPoint,
+  estimateLeanDeg,
+  formatClock,
+  formatDuration,
+  gpsQuality,
+  haversineM,
+} from '../metrics/trip';
 
 describe('auto-start on bike Bluetooth', () => {
   const base = {
@@ -35,6 +45,28 @@ describe('auto-start on bike Bluetooth', () => {
   it('stays quiet when switched off or no bike is chosen', () => {
     expect(onBluetoothChange({ ...base, enabled: false })).toEqual([]);
     expect(onBluetoothChange({ ...base, bike: null })).toEqual([]);
+  });
+});
+
+describe('lock-screen ride activity', () => {
+  it('maps link states to the four the activity shows', () => {
+    expect(activityLink('idle')).toBe('off');
+    expect(activityLink('searching')).toBe('searching');
+    expect(activityLink('handshaking')).toBe('connecting');
+    expect(activityLink('streaming')).toBe('onDash');
+  });
+
+  it('formats speed and trip in the chosen units', () => {
+    const base = { link: 'streaming' as const, mirroring: true, speedKmh: 100, tripKm: 10, trackTitle: null };
+    expect(activityState({ ...base, imperial: false })).toMatchObject({ speed: 100, speedUnit: 'km/h', tripText: '10.0 km' });
+    expect(activityState({ ...base, imperial: true })).toMatchObject({ speed: 62, speedUnit: 'mph', tripText: '6.2 mi' });
+    expect(activityState({ ...base, speedKmh: null, imperial: false }).speed).toBeNull();
+  });
+
+  it('shows while connecting or mirroring, and not when idle', () => {
+    expect(shouldShowActivity('idle', false)).toBe(false);
+    expect(shouldShowActivity('searching', false)).toBe(true);
+    expect(shouldShowActivity('idle', true)).toBe(true);
   });
 });
 
@@ -256,6 +288,94 @@ describe('trip computer', () => {
     const stale = trip.markStale();
     expect(stale).toMatchObject({ speedKmh: null, accuracyM: null, tripKm: km, maxSpeedKmh: 72 });
     expect(trip.markStale()).toBe(stale);
+  });
+
+  describe('lean estimate', () => {
+    it('matches the physics of a steady turn', () => {
+      // 72 km/h (20 m/s) turning 11.46 deg/s (0.2 rad/s): atan(20 * 0.2 / 9.81) = 22.2 deg.
+      expect(estimateLeanDeg(72, 90, 101.46, 1)).toBeCloseTo(22.2, 1);
+      expect(estimateLeanDeg(72, 90, 78.54, 1)).toBeCloseTo(-22.2, 1);
+    });
+
+    it('takes the short way round north', () => {
+      expect(estimateLeanDeg(72, 355, 5, 1)).toBeCloseTo(estimateLeanDeg(72, 10, 20, 1)!, 5);
+    });
+
+    it('gives no estimate when slow, after a gap, or for an impossible jump', () => {
+      expect(estimateLeanDeg(10, 90, 120, 1)).toBeNull();
+      expect(estimateLeanDeg(72, 90, 100, 8)).toBeNull();
+      expect(estimateLeanDeg(120, 0, 170, 1)).toBeNull();
+    });
+
+    it('is tracked through a corner, peaks in max lean, and returns upright when stopped', () => {
+      const trip = new TripComputer();
+      let heading = 90;
+      for (let t = 0; t <= 5; t++) {
+        trip.add({ timestamp: t * 1000, latitude: 45 + t * 0.0002, longitude: 25, speedKmh: 72, headingDeg: heading, accuracyM: 5 });
+        heading += 11.46;
+      }
+      const cornering = trip.get();
+      expect(cornering.leanDeg).toBeGreaterThan(20);
+      expect(cornering.leanDeg).toBeLessThan(23);
+      expect(cornering.maxLeanDeg).toBeCloseTo(cornering.leanDeg!, 5);
+
+      trip.add({ timestamp: 6000, latitude: 45.0012, longitude: 25, speedKmh: 0, headingDeg: 200, accuracyM: 5 });
+      expect(trip.get().leanDeg).toBe(0);
+      expect(trip.get().maxLeanDeg).toBeGreaterThan(20);
+      expect(trip.resetTrip().maxLeanDeg).toBe(0);
+    });
+  });
+
+  describe('lean with motion sensors', () => {
+    // Phone lying at an arbitrary angle: "down" is along (1, 2, 2) / 3.
+    const down = { x: 1 / 3, y: 2 / 3, z: 2 / 3 };
+    const turning = (rate: number, t: number): MotionSample => ({
+      timestamp: t,
+      // A turn around the vertical at `rate` deg/s, expressed in the phone's axes.
+      rotationRate: { x: down.x * rate, y: down.y * rate, z: down.z * rate },
+      gravity: { x: down.x * 9.81, y: down.y * 9.81, z: down.z * 9.81 },
+    });
+
+    it('finds the turn rate whichever way the phone lies', () => {
+      expect(turnRateAroundVertical(turning(11.46, 0))).toBeCloseTo(11.46, 3);
+      // Rotation about a horizontal axis (the phone tumbling in a pocket) is not a turn.
+      const tumble: MotionSample = { timestamp: 0, rotationRate: { x: 2, y: -1, z: 0 }, gravity: turning(0, 0).gravity };
+      expect(turnRateAroundVertical(tumble)).toBeCloseTo(0, 6);
+      expect(turnRateAroundVertical({ ...tumble, gravity: { x: 0, y: 0, z: 0 } })).toBeNull();
+    });
+
+    it('takes the size from motion and the side from GPS', () => {
+      const lean = new LeanEstimator();
+      lean.gps(0, 72, 90);
+      lean.gps(1000, 72, 80); // turning left
+      for (let i = 0; i < 40; i++) lean.motion(turning(11.46, 1000 + i * 100));
+      // 72 km/h at 11.46 deg/s is 22.2 degrees; left is negative.
+      expect(lean.get()).toBeCloseTo(-22.2, 0);
+    });
+
+    it('reads upright when slow, however the phone moves', () => {
+      const lean = new LeanEstimator();
+      lean.gps(0, 8, 90);
+      lean.motion(turning(60, 100));
+      expect(lean.get()).toBe(0);
+    });
+
+    it('does not guess a side before GPS has seen the turn', () => {
+      const lean = new LeanEstimator();
+      lean.gps(0, 72, 90);
+      lean.motion(turning(11.46, 100));
+      expect(lean.get()).toBe(0);
+    });
+
+    it('falls back to GPS alone when motion data stops', () => {
+      const lean = new LeanEstimator();
+      lean.gps(0, 72, 90);
+      lean.motion(turning(11.46, 100));
+      // Two seconds later, no motion readings since: GPS drives the estimate.
+      lean.gps(2000, 72, 90);
+      lean.gps(3000, 72, 101.46);
+      expect(lean.get()).toBeGreaterThan(10);
+    });
   });
 
   it('rates the GPS signal', () => {

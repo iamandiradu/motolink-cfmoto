@@ -10,11 +10,26 @@ import { DashAction, resolveAction } from '../buttons/mapping';
 import { DashPage, DashState, DashTheme, dashReducer, setTheme, showPage, tapItem } from '../dash/controller';
 import { nativeTransport } from '../link/nativeTransport';
 import { PhoneSensorSource } from '../metrics/phoneSensors';
+import { MirrorView, PresetId, toNativeView, updatePreset } from '../mirror/presets';
+import { NativeStrip, StripEdge, buildStrip, sameStrip } from '../mirror/strip';
 import { TripComputer } from '../metrics/trip';
 import { DEFAULT_IDENTITY } from '../protocol/control';
+import { feedSample } from '../rides';
 import { LinkSession, LinkState } from '../protocol/session';
 import { bootstrapSpotify, musicCommand, setMusicPageVisible } from '../spotify/session';
+import {
+  allProfiles,
+  chooseProfile,
+  emptyLearned,
+  evidenceFrom,
+  learnFromSnapshot,
+  matchProfile,
+  parseProfileJson,
+  sessionOptionsFor,
+} from '../bikes';
+import { loadCustomProfiles, loadLearnedBike, saveCustomProfile, saveLearnedBike } from '../bikes/storage';
 import { bikeConnected, onBluetoothChange } from './autoStart';
+import { activityState, shouldShowActivity } from './liveActivity';
 import { appendLog, getState, loadPersisted, saveSettings, setState } from './store';
 
 let session: LinkSession | null = null;
@@ -93,11 +108,27 @@ export async function startMetrics(): Promise<void> {
   if (metricsRunning) return;
   metricsRunning = true;
   try {
-    await phoneSensors.start((sample) => {
-      lastSampleAt = Date.now();
-      setState({ metrics: trip.add(sample) });
-    });
+    await phoneSensors.start(
+      (sample) => {
+        lastSampleAt = Date.now();
+        setState({ metrics: trip.add(sample) });
+        syncMirrorStrip();
+        // Does nothing unless the rider pressed Record.
+        feedSample(sample);
+        syncLiveActivity();
+      },
+      (motion) => {
+        // Motion arrives ten times a second; only publish when the lean actually moved.
+        const next = trip.addMotion(motion);
+        const shown = getState().metrics;
+        if (next !== shown && Math.round(next.leanDeg ?? 0) !== Math.round(shown.leanDeg ?? 0)) {
+          setState({ metrics: next });
+        }
+      },
+    );
     setInterval(() => {
+      // Also keeps the strip's clock moving when GPS is quiet.
+      syncMirrorStrip();
       if (Date.now() - lastSampleAt < GPS_STALE_MS) return;
       const stale = trip.markStale();
       if (stale !== getState().metrics) setState({ metrics: stale });
@@ -108,19 +139,21 @@ export async function startMetrics(): Promise<void> {
   }
 }
 
-const FIT_CODE = { auto: 0, fill: 1, fit: 2 } as const;
-
-/** Sends the saved crop, zoom and fit to the broadcast extension. */
+/** Sends the active preset's crop, zoom and fit to the broadcast extension. */
 export function applyMirrorView(): void {
-  const view = getState().settings.mirrorView;
-  MotoLink.setMirrorView({
-    zoom: view.zoom * 10,
-    trimTop: view.trimTop * 10,
-    trimBottom: view.trimBottom * 10,
-    trimLeft: view.trimLeft * 10,
-    trimRight: view.trimRight * 10,
-    fit: FIT_CODE[view.fit],
-  });
+  const { mirrorPresets, mirrorPreset } = getState().settings;
+  MotoLink.setMirrorView(toNativeView(mirrorPresets[mirrorPreset]));
+}
+
+/** Switches to another app's picture settings. */
+export function selectMirrorPreset(id: PresetId): void {
+  saveSettings({ mirrorPreset: id });
+  applyMirrorView();
+}
+
+export function changeMirrorPreset(id: PresetId, patch: Partial<MirrorView>): void {
+  saveSettings({ mirrorPresets: updatePreset(getState().settings.mirrorPresets, id, patch) });
+  applyMirrorView();
 }
 
 /** Opens the iOS sheet that starts or stops mirroring the phone screen. */
@@ -128,15 +161,95 @@ export function toggleMirroring(): void {
   void MotoLink.showBroadcastPicker().catch((error) => appendLog(`mirroring: ${String(error)}`));
 }
 
+/** Works out which bike this is from the QR, what the dash said before, and the rider's own pick. */
+function matchBike(): void {
+  const { bike, learnedBike, customProfiles, link } = getState();
+  if (!bike) {
+    setState({ bikeMatch: null });
+    return;
+  }
+  setState({
+    bikeMatch: matchProfile(evidenceFrom({ credentials: bike, snapshot: link, learned: learnedBike }), {
+      manualId: learnedBike?.chosenProfileId ?? undefined,
+      profiles: allProfiles(customProfiles),
+    }),
+  });
+}
+
+/** Loads what was learned about the paired bike on earlier rides. */
+async function loadBikeKnowledge(): Promise<void> {
+  const { bike } = getState();
+  const [learnedBike, customProfiles] = await Promise.all([
+    bike ? loadLearnedBike(bike.ssid).catch(() => null) : Promise.resolve(null),
+    loadCustomProfiles().catch(() => []),
+  ]);
+  setState({ learnedBike, customProfiles });
+  matchBike();
+}
+
+/** The rider picks a profile by hand; null returns to automatic. */
+export function chooseBikeProfile(id: string | null): void {
+  const { bike, learnedBike } = getState();
+  if (!bike) return;
+  const next = chooseProfile(learnedBike ?? emptyLearned(bike.ssid, Date.now()), id);
+  setState({ learnedBike: next });
+  void saveLearnedBike(next).catch(() => undefined);
+  matchBike();
+}
+
+/** Adds a profile someone shared as JSON. Returns an error text, or null when it was added. */
+export async function importBikeProfile(text: string): Promise<string | null> {
+  const parsed = parseProfileJson(text);
+  if (!parsed.ok) return parsed.error;
+  await saveCustomProfile(parsed.profile);
+  setState({ customProfiles: await loadCustomProfiles() });
+  matchBike();
+  return null;
+}
+
 export function connect(): void {
+  void connectAsync();
+}
+
+async function connectAsync(): Promise<void> {
   const { bike, settings } = getState();
   if (!bike) return;
   void session?.stop();
+  await loadBikeKnowledge();
+
+  const { bikeMatch, learnedBike } = getState();
+  const overrides = bikeMatch ? sessionOptionsFor(bikeMatch.profile, learnedBike) : null;
+  // An explicit setting wins; "auto" takes what worked before, then the profile, then the safe default.
+  const supportFunction =
+    settings.supportFunction === 'auto' ? (overrides?.identity.supportFunction ?? 0) : settings.supportFunction;
+  const identity = {
+    ...DEFAULT_IDENTITY,
+    phoneOs: settings.identityOs,
+    phoneType: settings.identityOs,
+    supportFunction,
+  };
+  if (bikeMatch) appendLog(`bike profile: ${bikeMatch.profile.name} (${bikeMatch.confidence}), flag ${supportFunction}`);
+
   session = new LinkSession(
     nativeTransport,
     {
       onChange: (link) => {
         setState({ link });
+        syncLiveActivity();
+        // Remember what this dash reports, so the next ride starts from facts.
+        const before = getState().learnedBike;
+        const learned = learnFromSnapshot(before, {
+          ssid: bike.ssid,
+          modelId: bike.modelId,
+          snapshot: link,
+          identity,
+          now: Date.now(),
+        });
+        if (learned && learned !== before) {
+          setState({ learnedBike: learned });
+          void saveLearnedBike(learned).catch(() => undefined);
+          matchBike();
+        }
         if (link.state === 'streaming' && previousLinkState !== 'streaming') {
           // The dash reads media-player capabilities once, when Bluetooth connects.
           // Announce again now that it is showing our picture.
@@ -146,15 +259,7 @@ export function connect(): void {
       },
       onLog: appendLog,
     },
-    {
-      bitrate: settings.bitrateKbps * 1000,
-      identity: {
-        ...DEFAULT_IDENTITY,
-        phoneOs: settings.identityOs,
-        phoneType: settings.identityOs,
-        supportFunction: settings.supportFunction,
-      },
-    },
+    { bitrate: settings.bitrateKbps * 1000, identity },
   );
   session.start(bike);
 }
@@ -163,6 +268,60 @@ export async function disconnect(): Promise<void> {
   await session?.stop();
   session = null;
   previousLinkState = 'idle';
+  setState({ link: { ...getState().link, state: 'idle' } });
+  syncLiveActivity();
+}
+
+let lastStrip: NativeStrip | null = null;
+
+/**
+ * Refreshes the split-view strip. Called often; sends only when a text
+ * changed, so a steady speed costs nothing.
+ */
+function syncMirrorStrip(): void {
+  const state = getState();
+  const strip = buildStrip({
+    edge: state.settings.mirrorStrip,
+    speedKmh: state.metrics.speedKmh,
+    tripKm: state.metrics.tripKm,
+    imperial: state.settings.units === 'imperial',
+    now: new Date(),
+    trackTitle: state.spotify.playback?.isPlaying ? state.spotify.playback.title : null,
+  });
+  if (sameStrip(lastStrip, strip)) return;
+  lastStrip = strip;
+  MotoLink.setMirrorStrip(strip);
+}
+
+export function setMirrorStrip(edge: StripEdge): void {
+  saveSettings({ mirrorStrip: edge });
+  syncMirrorStrip();
+}
+
+let activityShown = false;
+
+/**
+ * Keeps the lock-screen ride activity in step with the app. Cheap to call
+ * often: the native side spaces the updates out.
+ */
+function syncLiveActivity(): void {
+  const state = getState();
+  if (!shouldShowActivity(state.link.state, state.mirroring)) {
+    if (activityShown) MotoLink.endLiveActivity();
+    activityShown = false;
+    return;
+  }
+  activityShown =
+    MotoLink.updateLiveActivity(
+      activityState({
+        link: state.link.state,
+        mirroring: state.mirroring,
+        speedKmh: state.metrics.speedKmh,
+        tripKm: state.metrics.tripKm,
+        imperial: state.settings.units === 'imperial',
+        trackTitle: state.spotify.playback?.isPlaying ? state.spotify.playback.title : null,
+      }),
+    ) || activityShown;
 }
 
 /** Set when the bike connected while the app was in the background. */
@@ -209,6 +368,7 @@ export async function bootstrap(): Promise<void> {
   mirrorSubscription?.remove();
   mirrorSubscription = MotoLink.addListener('onMirrorState', (event) => {
     setState({ mirroring: event.active });
+    syncLiveActivity();
     appendLog(event.active ? 'screen mirroring started' : 'screen mirroring stopped');
   });
   setState({ mirroring: MotoLink.isMirroring(), bluetoothOutputs: MotoLink.getBluetoothOutputs() });
@@ -224,8 +384,10 @@ export async function bootstrap(): Promise<void> {
   });
   await applyButtonMode();
   applyMirrorView();
+  syncMirrorStrip();
   void bootstrapSpotify();
   void startMetrics();
+  void loadBikeKnowledge();
   const { bike, settings } = getState();
   if (bike && settings.autoConnect) connect();
 }

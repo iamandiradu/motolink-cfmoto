@@ -9,9 +9,12 @@ import type { Gesture, RawButtonEvent } from '../buttons/gestures';
 import { ButtonLayout, DEFAULT_LAYOUT, normaliseLayout } from '../buttons/mapping';
 import { DashState, DashTheme, INITIAL_DASH_STATE, THEMES } from '../dash/controller';
 import { EMPTY_METRICS, Metrics } from '../metrics/trip';
+import { MirrorPresets, PresetId, defaultPresets, isPresetId, normalisePresets } from '../mirror/presets';
+import type { StripEdge } from '../mirror/strip';
 import type { BikeCredentials } from '../protocol/qr';
 import type { SessionSnapshot } from '../protocol/session';
 import type { Playback } from '../spotify/api';
+import type { BikeProfile, LearnedBike, ProfileMatch } from '../bikes';
 
 export interface Settings {
   /** Connect by itself when the app opens and a bike is saved. */
@@ -23,8 +26,8 @@ export interface Settings {
   bitrateKbps: 800 | 1500 | 2500;
   /** What the app tells the dash it is. Android is the identity known to work. */
   identityOs: 'Android' | 'iOS';
-  /** 0 for older dashes, 128 for newer ones. Change it if the dash connects but never shows a picture. */
-  supportFunction: 0 | 128;
+  /** Dash generation flag: 0 for older dashes, 128 for newer ones. auto takes it from the bike profile. */
+  supportFunction: 'auto' | 0 | 128;
   units: 'metric' | 'imperial';
   /** Colour theme of the dash picture. */
   dashTheme: DashTheme;
@@ -34,32 +37,18 @@ export interface Settings {
   bikeBluetooth: string | null;
   /** Offer mirroring as soon as that Bluetooth device connects. */
   autoStart: boolean;
-  /** Mirrored picture: zoom and edge trims in percent, and how it is fitted to the dash. */
-  mirrorView: MirrorView;
+  /** Mirrored picture (crop, zoom, fit), remembered per navigation app. */
+  mirrorPresets: MirrorPresets;
+  /** Which preset is in use now. */
+  mirrorPreset: PresetId;
+  /** Split view: an info strip (speed, time, song) beside the mirrored picture. */
+  mirrorStrip: StripEdge;
+  /** First-run walkthrough: finished or skipped, and where the rider left off. */
+  onboardingDone: boolean;
+  onboardingStep: string | null;
   /** Ids of explanation cards the rider has closed. */
   dismissedHints: string[];
 }
-
-export interface MirrorView {
-  /** 100 = no zoom. */
-  zoom: number;
-  /** Percent cut from each edge of the upright picture. */
-  trimTop: number;
-  trimBottom: number;
-  trimLeft: number;
-  trimRight: number;
-  /** auto: a sideways screen fills the dash, an upright one is shown whole. */
-  fit: 'auto' | 'fill' | 'fit';
-}
-
-export const DEFAULT_MIRROR_VIEW: MirrorView = {
-  zoom: 100,
-  trimTop: 0,
-  trimBottom: 0,
-  trimLeft: 0,
-  trimRight: 0,
-  fit: 'auto',
-};
 
 export const DEFAULT_SETTINGS: Settings = {
   autoConnect: true,
@@ -67,13 +56,17 @@ export const DEFAULT_SETTINGS: Settings = {
   pinVolume: true,
   bitrateKbps: 1500,
   identityOs: 'Android',
-  supportFunction: 0,
+  supportFunction: 'auto',
   units: 'metric',
   dashTheme: 'aurora',
   spotifyClientId: '',
   bikeBluetooth: null,
   autoStart: true,
-  mirrorView: DEFAULT_MIRROR_VIEW,
+  mirrorPresets: defaultPresets(),
+  mirrorPreset: 'general',
+  mirrorStrip: 'bottom',
+  onboardingDone: false,
+  onboardingStep: null,
   dismissedHints: [],
 };
 
@@ -93,6 +86,10 @@ export interface AppState {
   /** Bluetooth audio devices the phone is connected to right now. */
   bluetoothOutputs: string[];
   spotify: { connected: boolean; playback: Playback | null; error: string | null };
+  /** Which bike profile the paired bike matched, and what its dash reported. */
+  bikeMatch: ProfileMatch | null;
+  learnedBike: LearnedBike | null;
+  customProfiles: BikeProfile[];
 }
 
 const IDLE_LINK: SessionSnapshot = {
@@ -117,6 +114,9 @@ let state: AppState = {
   mirroring: false,
   bluetoothOutputs: [],
   spotify: { connected: false, playback: null, error: null },
+  bikeMatch: null,
+  learnedBike: null,
+  customProfiles: [],
 };
 
 const listeners = new Set<() => void>();
@@ -163,11 +163,13 @@ function write(key: string, value: unknown): void {
 }
 
 function mergeSettings(stored: unknown): Settings {
-  const source = stored && typeof stored === 'object' ? (stored as Partial<Settings>) : {};
+  const source = stored && typeof stored === 'object' ? (stored as Partial<Settings> & { mirrorView?: unknown }) : {};
   return {
     ...DEFAULT_SETTINGS,
     ...source,
-    mirrorView: { ...DEFAULT_MIRROR_VIEW, ...(source.mirrorView ?? {}) },
+    // `mirrorView` is the single adjustment older versions stored.
+    mirrorPresets: normalisePresets(source.mirrorPresets, source.mirrorView),
+    mirrorPreset: isPresetId(source.mirrorPreset) ? source.mirrorPreset : 'general',
     dismissedHints: Array.isArray(source.dismissedHints) ? source.dismissedHints : [],
     dashTheme: THEMES.includes(source.dashTheme as DashTheme) ? (source.dashTheme as DashTheme) : DEFAULT_SETTINGS.dashTheme,
   };

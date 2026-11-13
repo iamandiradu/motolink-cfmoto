@@ -1,0 +1,1 @@
+../../modules/moto-link/ios/LiveActivity/RideActivityAttributes.swift

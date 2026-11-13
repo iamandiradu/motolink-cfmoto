@@ -3,12 +3,18 @@
  *
  * The dash link carries no vehicle data: no speed, rpm, gear or fuel reaches
  * the phone over Wi-Fi or Bluetooth on a bike without the T-Box. So everything
- * here comes from the phone's GPS. Only values that hold up with the phone in
- * a pocket are kept: lean angle, for one, needs a rigidly mounted phone and
- * was dropped.
+ * here comes from the phone's GPS, so it holds up with the phone in a pocket.
+ *
+ * Lean angle is an estimate, worked out from speed and how hard the bike is
+ * turning (motion sensors plus GPS). See lean.ts.
  *
  * MetricsSource is the seam for another source later (an OBD-II adapter).
  */
+
+import { LeanEstimator, MotionSample } from './lean';
+
+export { estimateLeanDeg } from './lean';
+export type { MotionSample } from './lean';
 
 export interface Metrics {
   /** km/h. null until the first GPS fix. */
@@ -20,11 +26,15 @@ export interface Metrics {
   longitude: number | null;
   /** Position accuracy in metres; lower is better. null without a fix. */
   accuracyM: number | null;
+  /** Estimated lean, degrees, positive to the right. null when it cannot be estimated. */
+  leanDeg: number | null;
   /** Trip computer. */
   tripKm: number;
   movingSeconds: number;
   maxSpeedKmh: number;
   avgSpeedKmh: number;
+  /** Largest estimated lean this trip, either side. */
+  maxLeanDeg: number;
 }
 
 export const EMPTY_METRICS: Metrics = {
@@ -34,10 +44,12 @@ export const EMPTY_METRICS: Metrics = {
   latitude: null,
   longitude: null,
   accuracyM: null,
+  leanDeg: null,
   tripKm: 0,
   movingSeconds: 0,
   maxSpeedKmh: 0,
   avgSpeedKmh: 0,
+  maxLeanDeg: 0,
 };
 
 /** One GPS reading. */
@@ -108,13 +120,14 @@ export function formatClock(date: Date): string {
 export class TripComputer {
   private metrics: Metrics = { ...EMPTY_METRICS };
   private lastFix: { lat: number; lon: number; at: number } | null = null;
+  private readonly lean = new LeanEstimator();
 
   get(): Metrics {
     return this.metrics;
   }
 
   resetTrip(): Metrics {
-    this.metrics = { ...this.metrics, tripKm: 0, movingSeconds: 0, maxSpeedKmh: 0, avgSpeedKmh: 0 };
+    this.metrics = { ...this.metrics, tripKm: 0, movingSeconds: 0, maxSpeedKmh: 0, avgSpeedKmh: 0, maxLeanDeg: 0 };
     this.lastFix = null;
     return this.metrics;
   }
@@ -125,9 +138,25 @@ export class TripComputer {
    */
   markStale(): Metrics {
     if (this.metrics.speedKmh === null && this.metrics.accuracyM === null) return this.metrics;
-    this.metrics = { ...this.metrics, speedKmh: null, accuracyM: null };
+    this.metrics = { ...this.metrics, speedKmh: null, accuracyM: null, leanDeg: null };
     this.lastFix = null;
+    this.lean.reset();
     return this.metrics;
+  }
+
+  private setLean(target: Metrics, lean: number | null): void {
+    target.leanDeg = lean;
+    if (lean !== null) target.maxLeanDeg = Math.max(target.maxLeanDeg, Math.abs(lean));
+  }
+
+  /** A motion-sensor reading. Only the lean estimate changes. */
+  addMotion(sample: MotionSample): Metrics {
+    const lean = this.lean.motion(sample);
+    if (lean === this.metrics.leanDeg) return this.metrics;
+    const next = { ...this.metrics };
+    this.setLean(next, lean);
+    this.metrics = next;
+    return next;
   }
 
   add(sample: MetricsSample): Metrics {
@@ -144,6 +173,9 @@ export class TripComputer {
     if (sample.speedKmh !== undefined) next.speedKmh = moving ? rawSpeed : 0;
     // Course is noise while stopped; keep the last direction of travel.
     if (sample.headingDeg !== undefined && moving) next.headingDeg = sample.headingDeg;
+
+    // A poor fix has a wild course; treat it as "no course" for lean.
+    this.setLean(next, this.lean.gps(sample.timestamp, sample.speedKmh, accurate ? sample.headingDeg : undefined));
 
     if (accurate) {
       if (this.lastFix) {

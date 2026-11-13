@@ -233,6 +233,19 @@ public class MotoLinkModule: Module {
       try await UNUserNotificationCenter.current().add(request)
     }
 
+    // MARK: Live Activity (lock screen and Dynamic Island)
+
+    /// Starts or refreshes the ride Live Activity. iOS only lets it start while
+    /// the app is in front; later updates work from the background.
+    Function("updateLiveActivity") { (state: [String: Any]) -> Bool in
+      if LiveActivityController.update(state: state) { return true }
+      return LiveActivityController.start(state: state)
+    }
+
+    Function("endLiveActivity") {
+      LiveActivityController.end()
+    }
+
     // MARK: Screen mirroring
 
     Function("isMirroring") { () -> Bool in
@@ -249,6 +262,27 @@ public class MotoLinkModule: Module {
           trimLeft: view["trimLeft"] ?? 0,
           trimRight: view["trimRight"] ?? 0,
           fit: MirrorWire.View.Fit(rawValue: UInt32(clamping: view["fit"] ?? 0)) ?? .auto
+        ))
+    }
+
+    /// Info strip drawn beside the mirrored picture: three short texts.
+    /// Colours are 0xRRGGBB numbers.
+    Function("setMirrorStrip") { (strip: [String: Any]) in
+      func colour(_ key: String, _ fallback: Int) -> MirrorWire.Strip.Color {
+        let value = (strip[key] as? NSNumber)?.intValue ?? fallback
+        return .init(red: UInt8((value >> 16) & 0xFF), green: UInt8((value >> 8) & 0xFF), blue: UInt8(value & 0xFF))
+      }
+      self.mirror.setStrip(
+        MirrorWire.Strip(
+          enabled: (strip["enabled"] as? Bool) ?? false,
+          edge: (strip["edge"] as? String) == "top" ? .top : .bottom,
+          height: (strip["height"] as? NSNumber)?.intValue ?? 150,
+          left: (strip["left"] as? String) ?? "",
+          center: (strip["center"] as? String) ?? "",
+          right: (strip["right"] as? String) ?? "",
+          background: colour("background", 0x000000),
+          text: colour("text", 0xFFFFFF),
+          accent: colour("accent", 0xFF3D97)
         ))
     }
 

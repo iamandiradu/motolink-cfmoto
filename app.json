@@ -18,7 +18,9 @@
           "audio",
           "location"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true,
+        "NSMotionUsageDescription": "MotoLink uses motion sensors to estimate lean angle."
       }
     },
     "plugins": [

@@ -43,6 +43,28 @@ declare class MotoLinkNativeModule extends NativeModule<MotoLinkEvents> {
   stopButtonCapture(): Promise<void>;
   reannounceButtons(): Promise<void>;
   isMirroring(): boolean;
+  /** Info strip beside the mirrored picture. Colours are 0xRRGGBB. */
+  setMirrorStrip(strip: {
+    enabled: boolean;
+    edge: 'bottom' | 'top';
+    height: number;
+    left: string;
+    center: string;
+    right: string;
+    background: number;
+    text: number;
+    accent: number;
+  }): void;
+  /** Starts or refreshes the lock-screen ride activity. False when iOS refused. */
+  updateLiveActivity(state: {
+    linkState: 'searching' | 'connecting' | 'onDash' | 'off';
+    mirroring: boolean;
+    speed: number | null;
+    speedUnit: string;
+    tripText: string;
+    trackTitle: string | null;
+  }): boolean;
+  endLiveActivity(): void;
   getBluetoothOutputs(): string[];
   requestNotificationPermission(): Promise<boolean>;
   notify(title: string, body: string): Promise<void>;

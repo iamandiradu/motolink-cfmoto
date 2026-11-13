@@ -43,7 +43,7 @@ const PALETTES: Record<DashTheme, Palette> = {
     text: '#ffffff',
     dim: '#c2c9d0',
     accent: '#6fd0f7',
-    accent2: '#ff8fc3',
+    accent2: '#ffa3cd',
     warn: '#ffc266',
   },
   graphite: {
@@ -128,7 +128,12 @@ function RidePage({ metrics, dash, palette }: PageProps) {
   return (
     <View style={styles.row}>
       <View style={styles.speedBlock}>
-        <Text style={[styles.speed, { color: palette.text }]}>{units.speed(metrics.speedKmh)}</Text>
+        {/* No reading: a quiet placeholder, not a pair of blocks that looks like a fault. */}
+        {metrics.speedKmh === null ? (
+          <Text style={[styles.speedEmpty, { color: palette.dim }]}>- -</Text>
+        ) : (
+          <Text style={[styles.speed, { color: palette.text }]}>{units.speed(metrics.speedKmh)}</Text>
+        )}
         <Text style={[styles.speedUnit, { color: gpsQuality(metrics.accuracyM) === 'good' ? palette.dim : palette.warn }]}>
           {gpsQuality(metrics.accuracyM) === 'good' ? units.speedUnit : gpsQuality(metrics.accuracyM) === 'poor' ? 'weak GPS' : 'no GPS'}
         </Text>
@@ -218,6 +223,7 @@ function TripPage({ metrics, dash, palette }: PageProps) {
       <View style={styles.row}>
         <Stat label="AVERAGE" value={units.speed(metrics.avgSpeedKmh)} unit={units.speedUnit} palette={palette} />
         <Stat label="TOP" value={units.speed(metrics.maxSpeedKmh)} unit={units.speedUnit} palette={palette} />
+        <Stat label="MAX LEAN ≈" value={`${Math.round(metrics.maxLeanDeg)}°`} palette={palette} />
         <Focusable index={0} focus={dash.focus} palette={palette}>
           <Text style={[styles.button, { color: palette.warn }]}>Reset trip</Text>
         </Focusable>
@@ -376,6 +382,7 @@ const styles = StyleSheet.create({
   },
   speedBlock: { width: 300, alignItems: 'center', justifyContent: 'center' },
   speed: { fontSize: 190, fontWeight: '800', lineHeight: 200, fontVariant: ['tabular-nums'] },
+  speedEmpty: { fontSize: 96, fontWeight: '700', lineHeight: 200, letterSpacing: 6 },
   speedUnit: { fontSize: 28, fontWeight: '600', marginTop: -8 },
   stat: { flex: 1, justifyContent: 'center' },
   statLabel: { fontSize: 17, fontWeight: '700', letterSpacing: 1.5 },

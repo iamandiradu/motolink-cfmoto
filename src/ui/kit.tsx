@@ -1,11 +1,12 @@
 /** Shared pieces for the phone screens. */
-import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export const colors = {
   bg: '#000000',
   card: '#12161c',
-  line: '#2a323c',
+  /** Borders of inputs and outline buttons: 3:1 against the card, so they read as controls. */
+  line: '#5b6673',
   text: '#f2f5f8',
   dim: '#93a1b0',
   /** CFMOTO blue. */
@@ -25,11 +26,36 @@ export function Screen({ children }: { children: ReactNode }) {
   );
 }
 
-export function Card({ title, children }: { title?: string; children: ReactNode }) {
+/**
+ * A titled group. With `collapsible` it starts folded and opens on a tap of
+ * its header, which keeps rarely needed groups out of the way.
+ */
+export function Card(props: { title?: string; children: ReactNode; collapsible?: boolean; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(props.defaultOpen ?? !props.collapsible);
+  if (!props.collapsible || !props.title) {
+    return (
+      <View style={styles.card}>
+        {props.title ? (
+          <Text style={styles.cardTitle} accessibilityRole="header">
+            {props.title}
+          </Text>
+        ) : null}
+        {props.children}
+      </View>
+    );
+  }
   return (
     <View style={styles.card}>
-      {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
-      {children}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={props.title}
+        onPress={() => setOpen(!open)}
+        style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>{props.title}</Text>
+        <Text style={styles.cardChevron}>{open ? '▾' : '›'}</Text>
+      </Pressable>
+      {open ? props.children : null}
     </View>
   );
 }
@@ -52,6 +78,19 @@ export function Hint(props: { title: string; children: ReactNode; onDismiss: () 
       {props.children}
     </View>
   );
+}
+
+/** Names the control that follows it. */
+export function Label({ children }: { children: ReactNode }) {
+  return <Text style={styles.label}>{children}</Text>;
+}
+
+/** Asks before something that cannot be undone. */
+export function confirm(title: string, message: string, action: string, onConfirm: () => void): void {
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: action, style: 'destructive', onPress: onConfirm },
+  ]);
 }
 
 export function Body({ children, dim, selectable }: { children: ReactNode; dim?: boolean; selectable?: boolean }) {
@@ -166,10 +205,13 @@ const styles = StyleSheet.create({
   screenContent: { padding: 16, gap: 14, paddingBottom: 40 },
   card: { backgroundColor: colors.card, borderRadius: 14, padding: 16, gap: 10 },
   cardTitle: { color: colors.text, fontSize: 17, fontWeight: '700', flexShrink: 1 },
+  cardHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  cardChevron: { color: colors.dim, fontSize: 20, width: 20, textAlign: 'center' },
   hint: { borderWidth: 1, borderColor: colors.line },
   hintHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   hintClose: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.line },
   hintCloseGlyph: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  label: { color: colors.text, fontSize: 15, fontWeight: '700', marginTop: 4 },
   body: { color: colors.text, fontSize: 15, lineHeight: 21 },
   button: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   buttonLabel: { fontSize: 16, fontWeight: '700' },

@@ -14,6 +14,7 @@ final class MirrorReceiver {
   private var parser = MirrorWire.Parser()
   private var config: MirrorWire.Config?
   private var view = MirrorWire.View()
+  private var strip = MirrorWire.Strip()
 
   func start() {
     queue.async {
@@ -59,6 +60,15 @@ final class MirrorReceiver {
     }
   }
 
+  /// Info band beside the mirrored picture. Applies at once, even on a still
+  /// screen, so it can carry live values such as speed and the clock.
+  func setStrip(_ strip: MirrorWire.Strip) {
+    queue.async {
+      self.strip = strip.sanitized
+      self.send(.strip(self.strip))
+    }
+  }
+
   func requestKeyframe() {
     queue.async {
       self.send(.keyframe)
@@ -80,6 +90,7 @@ final class MirrorReceiver {
       switch state {
       case .ready:
         self.send(.view(self.view))
+        self.send(.strip(self.strip))
         if let config = self.config { self.send(.config(config)) }
         self.onConnected?()
         self.read(incoming)

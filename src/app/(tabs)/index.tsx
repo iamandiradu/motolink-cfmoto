@@ -2,11 +2,20 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { applyMirrorView, connect, disconnect, toggleMirroring } from '../../app-state/controller';
-import { DEFAULT_MIRROR_VIEW, MirrorView, dismissHint, saveBike, saveSettings, useAppState } from '../../app-state/store';
+import {
+  changeMirrorPreset,
+  connect,
+  disconnect,
+  selectMirrorPreset,
+  setMirrorStrip,
+  toggleMirroring,
+} from '../../app-state/controller';
+import { dismissHint, saveBike, useAppState } from '../../app-state/store';
+import { DEFAULT_MIRROR_VIEW, MirrorView, PRESET_APPS, PresetApp, isDefaultView } from '../../mirror/presets';
+import { WifiHelper } from '../../onboarding/WifiHelper';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
-import { Body, Button, Card, Choice, Hint, Row, Screen, Stepper, colors } from '../../ui/kit';
+import { Body, Button, Card, Choice, Hint, Row, Screen, Stepper, colors, confirm } from '../../ui/kit';
 
 const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string }> = {
   idle: { title: 'Not connected', hint: 'Tap Connect with the bike switched on.', color: colors.dim },
@@ -22,30 +31,23 @@ const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string
   streaming: { title: 'On the dash', hint: 'The dash is showing the picture above.', color: colors.ok },
 };
 
-const NAV_APPS = [
-  { label: 'Apple Maps', url: 'maps://' },
-  { label: 'Google Maps', url: 'comgooglemaps://' },
-  { label: 'Waze', url: 'waze://' },
-] as const;
-
 const FIT_TEXT: Record<MirrorView['fit'], string> = {
   auto: 'A sideways phone fills the dash. An upright phone is shown whole, with bars at the sides.',
   fill: 'Always fills the dash. The edges that do not fit are cut off.',
   fit: 'Always shows the whole screen. Bars appear where it does not reach.',
 };
 
-/** Crop, zoom and fit of the mirrored picture. Changes apply while mirroring. */
+/** Crop, zoom and fit of the mirrored picture, kept separately for each app. */
 function MirrorAdjust() {
-  const view = useAppState((s) => s.settings.mirrorView);
+  const presets = useAppState((s) => s.settings.mirrorPresets);
+  const active = useAppState((s) => s.settings.mirrorPreset);
+  const strip = useAppState((s) => s.settings.mirrorStrip);
   const [open, setOpen] = useState(false);
-  const changed = (Object.keys(DEFAULT_MIRROR_VIEW) as (keyof MirrorView)[]).some(
-    (key) => view[key] !== DEFAULT_MIRROR_VIEW[key],
-  );
+  const view = presets[active];
+  const changed = !isDefaultView(view);
+  const activeLabel = PRESET_APPS.find((app) => app.id === active)?.label ?? '';
 
-  const update = (patch: Partial<MirrorView>) => {
-    saveSettings({ mirrorView: { ...view, ...patch } });
-    applyMirrorView();
-  };
+  const update = (patch: Partial<MirrorView>) => changeMirrorPreset(active, patch);
   const trim = (label: string, key: 'trimTop' | 'trimBottom' | 'trimLeft' | 'trimRight') => (
     <Stepper label={label} value={view[key]} unit="%" min={0} max={40} step={2} onChange={(value) => update({ [key]: value })} />
   );
@@ -57,11 +59,30 @@ function MirrorAdjust() {
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(!open)}
         style={styles.adjustHeader}>
-        <Text style={styles.adjustTitle}>Adjust the picture{changed ? ' (changed)' : ''}</Text>
+        <Text style={styles.adjustTitle}>
+          Adjust the picture: {activeLabel}
+          {changed ? ' (changed)' : ''}
+        </Text>
         <Text style={styles.adjustChevron}>{open ? '▾' : '›'}</Text>
       </Pressable>
       {open ? (
         <View style={styles.adjustBody}>
+          <Body dim>Info strip with speed, time and the song or trip distance, beside the map.</Body>
+          <Choice
+            value={strip}
+            onChange={setMirrorStrip}
+            options={[
+              { value: 'bottom', label: 'Strip at bottom' },
+              { value: 'top', label: 'Strip at top' },
+              { value: 'off', label: 'No strip' },
+            ]}
+          />
+          <Body dim>Each app keeps its own picture settings. Choose which one to adjust and use.</Body>
+          <Choice
+            value={active}
+            onChange={selectMirrorPreset}
+            options={PRESET_APPS.map((app) => ({ value: app.id, label: app.label }))}
+          />
           <Choice
             value={view.fit}
             onChange={(fit) => update({ fit })}
@@ -79,13 +100,10 @@ function MirrorAdjust() {
           {trim('Cut left', 'trimLeft')}
           {trim('Cut right', 'trimRight')}
           <Button
-            label="Reset picture"
+            label={`Reset ${activeLabel}`}
             kind="plain"
             disabled={!changed}
-            onPress={() => {
-              saveSettings({ mirrorView: DEFAULT_MIRROR_VIEW });
-              applyMirrorView();
-            }}
+            onPress={() => update(DEFAULT_MIRROR_VIEW)}
           />
         </View>
       ) : null}
@@ -96,8 +114,11 @@ function MirrorAdjust() {
 function MirrorCard({ mirroring }: { mirroring: boolean }) {
   const [missing, setMissing] = useState<string | null>(null);
 
-  const open = (app: (typeof NAV_APPS)[number]) => {
+  // Opening an app from here also switches to that app's picture settings.
+  const open = (app: PresetApp) => {
+    if (!app.url) return;
     setMissing(null);
+    selectMirrorPreset(app.id);
     Linking.openURL(app.url).catch(() => setMissing(app.label));
   };
 
@@ -120,8 +141,8 @@ function MirrorCard({ mirroring }: { mirroring: boolean }) {
       {mirroring ? (
         <>
           <View style={styles.apps}>
-            {NAV_APPS.map((app) => (
-              <View key={app.label} style={styles.app}>
+            {PRESET_APPS.filter((app) => app.url).map((app) => (
+              <View key={app.id} style={styles.app}>
                 <Button label={app.label} kind="plain" onPress={() => open(app)} />
               </View>
             ))}
@@ -202,6 +223,13 @@ export default function LinkScreen() {
         )}
       </Card>
 
+      {/* The phone is not on the dash network: show how to join it by hand. */}
+      {link.state === 'searching' ? (
+        <Card title="Join the dash Wi-Fi">
+          <WifiHelper ssid={bike.ssid} password={bike.password} connected={false} />
+        </Card>
+      ) : null}
+
       <MirrorCard mirroring={mirroring} />
 
       <Card title="Bike">
@@ -217,10 +245,12 @@ export default function LinkScreen() {
         <Button
           label="Forget this bike"
           kind="danger"
-          onPress={() => {
-            void disconnect();
-            saveBike(null);
-          }}
+          onPress={() =>
+            confirm('Forget this bike?', 'You will need to scan the dash QR code again to pair.', 'Forget', () => {
+              void disconnect();
+              saveBike(null);
+            })
+          }
         />
       </Card>
 

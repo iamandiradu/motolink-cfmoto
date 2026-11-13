@@ -1,4 +1,6 @@
+import CoreGraphics
 import CoreImage
+import CoreText
 import CoreVideo
 import Foundation
 import ImageIO
@@ -18,8 +20,17 @@ final class MirrorSender {
   private var connection: NWConnection?
   private var parser = MirrorWire.Parser()
   private var encoder: VideoEncoder?
+  /// What was last encoded: the picture with the strip drawn on.
   private var lastScaled: CVPixelBuffer?
+  /// The picture alone, already scaled to the dash, and the rectangle it was
+  /// fitted into. Kept so a strip change can be redrawn on a static screen
+  /// without holding ReplayKit's source buffer.
+  private var lastPicture: CVPixelBuffer?
+  private var lastPictureRect = CGRect.zero
+  /// A strip change is waiting to go out at the normal frame pace.
+  private var redrawPending = false
   private var view = MirrorWire.View()
+  private var strip = MirrorWire.Strip()
   private var lastEncodeAt: CFAbsoluteTime = 0
   private var minInterval: CFAbsoluteTime = 1.0 / 20.0
   private var failures = 0
@@ -56,9 +67,16 @@ final class MirrorSender {
       self.lock.lock()
       self.encoder?.invalidate()
       self.encoder = nil
-      self.lastScaled = nil
+      self.forgetPicture()
       self.lock.unlock()
     }
+  }
+
+  /// Caller holds `lock`.
+  private func forgetPicture() {
+    lastScaled = nil
+    lastPicture = nil
+    redrawPending = false
   }
 
   /// One screen frame. Safe to call from any thread; drops frames that arrive
@@ -69,10 +87,14 @@ final class MirrorSender {
     guard let encoder else { return }
     let now = CFAbsoluteTimeGetCurrent()
     guard now - lastEncodeAt >= minInterval else { return }
-    guard let scaled = scale(pixelBuffer, orientation: orientation, config: encoder.config, encoder: encoder) else { return }
+    guard let rendered = render(pixelBuffer, orientation: orientation, config: encoder.config, encoder: encoder)
+    else { return }
     lastEncodeAt = now
-    lastScaled = scaled
-    encoder.encode(scaled)
+    lastPicture = rendered.picture
+    lastPictureRect = rendered.rect
+    lastScaled = rendered.composed
+    redrawPending = false
+    encoder.encode(rendered.composed)
   }
 
   private func repeatIfQuiet() {
@@ -80,22 +102,63 @@ final class MirrorSender {
     defer { lock.unlock() }
     guard let encoder, let lastScaled else { return }
     let now = CFAbsoluteTimeGetCurrent()
-    guard now - lastEncodeAt >= MirrorSender.repeatAfter else { return }
+    let wait = redrawPending ? minInterval : MirrorSender.repeatAfter
+    guard now - lastEncodeAt >= wait else { return }
     lastEncodeAt = now
+    redrawPending = false
     encoder.encode(lastScaled)
   }
 
   /// Rotates the frame upright, cuts the trimmed edges, then places it on the
   /// dash. By default a sideways screen fills the dash (a sliver is cropped)
-  /// and an upright screen is shown whole between black bars.
+  /// and an upright screen is shown whole between black bars. With the strip
+  /// on, all of that happens in the space the strip leaves.
   func scale(
     _ source: CVPixelBuffer,
     orientation: CGImagePropertyOrientation,
     config: VideoEncoder.Config,
     encoder: VideoEncoder,
-    view: MirrorWire.View? = nil
+    view: MirrorWire.View? = nil,
+    strip: MirrorWire.Strip? = nil
   ) -> CVPixelBuffer? {
+    render(source, orientation: orientation, config: config, encoder: encoder, view: view, strip: strip)?.composed
+  }
+
+  /// Dash-sized rectangles for the picture and the strip, in Core Image and
+  /// Core Graphics coordinates (origin bottom left, so "top" is the high edge).
+  static func layout(_ strip: MirrorWire.Strip, width: Int, height: Int) -> (picture: CGRect, strip: CGRect?) {
+    let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+    guard strip.enabled else { return (bounds, nil) }
+    let band = min(max((CGFloat(height) * CGFloat(strip.height) / 1000).rounded(), 1), CGFloat(height - 1))
+    let (stripRect, pictureRect) = bounds.divided(atDistance: band, from: strip.edge == .top ? .maxYEdge : .minYEdge)
+    return (pictureRect, stripRect)
+  }
+
+  private func render(
+    _ source: CVPixelBuffer,
+    orientation: CGImagePropertyOrientation,
+    config: VideoEncoder.Config,
+    encoder: VideoEncoder,
+    view: MirrorWire.View? = nil,
+    strip: MirrorWire.Strip? = nil
+  ) -> (picture: CVPixelBuffer, rect: CGRect, composed: CVPixelBuffer)? {
     let view = view ?? self.view
+    let strip = strip ?? self.strip
+    let rects = MirrorSender.layout(strip, width: config.width, height: config.height)
+    guard let picture = fitPicture(source, orientation: orientation, config: config, encoder: encoder, view: view, into: rects.picture),
+      let composed = compose(picture, strip: strip, in: rects.strip, encoder: encoder)
+    else { return nil }
+    return (picture, rects.picture, composed)
+  }
+
+  private func fitPicture(
+    _ source: CVPixelBuffer,
+    orientation: CGImagePropertyOrientation,
+    config: VideoEncoder.Config,
+    encoder: VideoEncoder,
+    view: MirrorWire.View,
+    into area: CGRect
+  ) -> CVPixelBuffer? {
     guard let target = encoder.makePixelBuffer() else { return nil }
     let bounds = CGRect(x: 0, y: 0, width: config.width, height: config.height)
 
@@ -112,24 +175,161 @@ final class MirrorSender {
     let size = image.extent.size
     guard size.width > 0, size.height > 0 else { return nil }
 
-    let fitX = bounds.width / size.width
-    let fitY = bounds.height / size.height
     let fill: Bool
     switch view.fit {
     case .fill: fill = true
     case .fit: fill = false
     case .auto: fill = size.width >= size.height
     }
-    let factor = (fill ? max(fitX, fitY) : min(fitX, fitY)) * CGFloat(view.zoom) / 1000
-    image = image.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
-    image = image.transformed(
-      by: CGAffineTransform(
-        translationX: bounds.midX - image.extent.midX,
-        y: bounds.midY - image.extent.midY
-      ))
+    image = MirrorSender.place(image, in: area, fill: fill, zoom: CGFloat(view.zoom) / 1000)
+    if area != bounds {
+      // A filled or zoomed picture would otherwise spill under the strip.
+      image = image.cropped(to: area)
+    }
     let background = CIImage(color: .black).cropped(to: bounds)
     context.render(image.composited(over: background), to: target, bounds: bounds, colorSpace: colorSpace)
     return target
+  }
+
+  private static func place(_ image: CIImage, in area: CGRect, fill: Bool, zoom: CGFloat) -> CIImage {
+    let size = image.extent.size
+    let fitX = area.width / size.width
+    let fitY = area.height / size.height
+    let factor = (fill ? max(fitX, fitY) : min(fitX, fitY)) * zoom
+    let scaled = image.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+    return scaled.transformed(
+      by: CGAffineTransform(
+        translationX: area.midX - scaled.extent.midX,
+        y: area.midY - scaled.extent.midY
+      ))
+  }
+
+  /// Moves an already scaled picture into a new rectangle when the strip's
+  /// size or edge changes on a static screen. Approximate (the trims cannot be
+  /// redone without the source frame); the next screen frame replaces it.
+  private func refit(_ picture: CVPixelBuffer, from old: CGRect, to area: CGRect, encoder: VideoEncoder) -> CVPixelBuffer? {
+    guard let target = encoder.makePixelBuffer(), old.width > 0, old.height > 0 else { return nil }
+    let config = encoder.config
+    let bounds = CGRect(x: 0, y: 0, width: config.width, height: config.height)
+    var image = CIImage(cvPixelBuffer: picture).cropped(to: old)
+    image = MirrorSender.place(image, in: area, fill: view.fit != .fit, zoom: 1).cropped(to: area)
+    let background = CIImage(color: .black).cropped(to: bounds)
+    context.render(image.composited(over: background), to: target, bounds: bounds, colorSpace: colorSpace)
+    return target
+  }
+
+  /// The picture with the strip drawn over its band. Draws into a copy because
+  /// the picture is kept for later redraws and may still be in the encoder.
+  private func compose(_ picture: CVPixelBuffer, strip: MirrorWire.Strip, in band: CGRect?, encoder: VideoEncoder) -> CVPixelBuffer? {
+    guard let band else { return picture }
+    guard let target = encoder.makePixelBuffer(), MirrorSender.copy(picture, to: target) else { return nil }
+    CVPixelBufferLockBaseAddress(target, [])
+    defer { CVPixelBufferUnlockBaseAddress(target, []) }
+    guard let base = CVPixelBufferGetBaseAddress(target),
+      let cg = CGContext(
+        data: base,
+        width: CVPixelBufferGetWidth(target),
+        height: CVPixelBufferGetHeight(target),
+        bitsPerComponent: 8,
+        bytesPerRow: CVPixelBufferGetBytesPerRow(target),
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+      )
+    else { return nil }
+    MirrorSender.draw(strip, in: band, on: cg)
+    return target
+  }
+
+  private static func copy(_ source: CVPixelBuffer, to target: CVPixelBuffer) -> Bool {
+    CVPixelBufferLockBaseAddress(source, .readOnly)
+    CVPixelBufferLockBaseAddress(target, [])
+    defer {
+      CVPixelBufferUnlockBaseAddress(target, [])
+      CVPixelBufferUnlockBaseAddress(source, .readOnly)
+    }
+    guard let from = CVPixelBufferGetBaseAddress(source), let to = CVPixelBufferGetBaseAddress(target) else { return false }
+    let fromRow = CVPixelBufferGetBytesPerRow(source)
+    let toRow = CVPixelBufferGetBytesPerRow(target)
+    let rows = min(CVPixelBufferGetHeight(source), CVPixelBufferGetHeight(target))
+    let width = min(fromRow, toRow)
+    for row in 0..<rows {
+      memcpy(to + row * toRow, from + row * fromRow, width)
+    }
+    return true
+  }
+
+  /// A bitmap context over pixel memory has its origin at the bottom left like
+  /// Core Image, so the same rectangles apply. Text is bold and sized from the
+  /// band so it reads at arm's length on a small dash.
+  static func draw(_ strip: MirrorWire.Strip, in band: CGRect, on cg: CGContext) {
+    func cgColor(_ color: MirrorWire.Strip.Color) -> CGColor {
+      CGColor(
+        colorSpace: CGColorSpaceCreateDeviceRGB(),
+        components: [CGFloat(color.red) / 255, CGFloat(color.green) / 255, CGFloat(color.blue) / 255, 1]
+      ) ?? CGColor(gray: 0, alpha: 1)
+    }
+
+    cg.saveGState()
+    defer { cg.restoreGState() }
+    cg.clip(to: band)
+    cg.setFillColor(cgColor(strip.background))
+    cg.fill(band)
+
+    let accentHeight = max(2, (band.height * 0.06).rounded())
+    let accent = band.divided(atDistance: accentHeight, from: strip.edge == .top ? .minYEdge : .maxYEdge)
+    cg.setFillColor(cgColor(strip.accent))
+    cg.fill(accent.slice)
+
+    let textArea = accent.remainder
+    let fontSize = max(8, (textArea.height * 0.62).rounded())
+    let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, fontSize, nil)
+      ?? CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+    let attributes: [NSAttributedString.Key: Any] = [
+      NSAttributedString.Key(kCTFontAttributeName as String): font,
+      NSAttributedString.Key(kCTForegroundColorAttributeName as String): cgColor(strip.text),
+    ]
+    let ellipsis = CTLineCreateWithAttributedString(NSAttributedString(string: "\u{2026}", attributes: attributes))
+
+    func line(_ text: String, maxWidth: CGFloat) -> (CTLine, CGFloat)? {
+      guard !text.isEmpty, maxWidth > 0 else { return nil }
+      var line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+      if width(line) > maxWidth {
+        guard let cut = CTLineCreateTruncatedLine(line, Double(maxWidth), .end, ellipsis) else { return nil }
+        line = cut
+      }
+      return (line, width(line))
+    }
+    func width(_ line: CTLine) -> CGFloat {
+      CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+    }
+
+    let padding = (textArea.height * 0.3).rounded()
+    let gap = (textArea.height * 0.4).rounded()
+    let inner = textArea.insetBy(dx: padding, dy: 0)
+    // Optical centre: cap height, not ascent, so digits sit mid-band.
+    let baseline = (textArea.midY - CTFontGetCapHeight(font) / 2).rounded()
+
+    let center = line(strip.center, maxWidth: inner.width * 0.4)
+    let centerMinX = center.map { inner.midX - $0.1 / 2 } ?? inner.midX
+    let centerMaxX = center.map { inner.midX + $0.1 / 2 } ?? inner.midX
+    let leftLimit = center == nil ? inner.width / 2 - gap / 2 : centerMinX - gap - inner.minX
+    let left = line(strip.left, maxWidth: leftLimit)
+    let rightStart = max(center == nil ? inner.minX : centerMaxX, inner.minX + (left?.1 ?? 0)) + gap
+    let right = line(strip.right, maxWidth: inner.maxX - rightStart)
+
+    cg.setShouldAntialias(true)
+    if let left {
+      cg.textPosition = CGPoint(x: inner.minX, y: baseline)
+      CTLineDraw(left.0, cg)
+    }
+    if let center {
+      cg.textPosition = CGPoint(x: (inner.midX - center.1 / 2).rounded(), y: baseline)
+      CTLineDraw(center.0, cg)
+    }
+    if let right {
+      cg.textPosition = CGPoint(x: inner.maxX - right.1, y: baseline)
+      CTLineDraw(right.0, cg)
+    }
   }
 
   private func connect() {
@@ -162,7 +362,7 @@ final class MirrorSender {
     lock.lock()
     encoder?.invalidate()
     encoder = nil
-    lastScaled = nil
+    forgetPicture()
     lock.unlock()
 
     failures += 1
@@ -207,7 +407,7 @@ final class MirrorSender {
       defer { lock.unlock() }
       if encoder?.config == config { return }
       encoder?.invalidate()
-      lastScaled = nil
+      forgetPicture()
       // Feed slightly under the dash's pull rate (about 24 fps).
       minInterval = 1.0 / Double(min(max(config.fps, 5), 22))
       encoder = try? VideoEncoder(config: config) { [weak connection] data, isKeyframe in
@@ -222,12 +422,41 @@ final class MirrorSender {
       // around to redraw: holding ReplayKit's buffers starves its pool.
       view = wanted.sanitized
       lock.unlock()
+    case .strip(let wanted):
+      lock.lock()
+      updateStrip(wanted.sanitized)
+      lock.unlock()
     case .keyframe:
       lock.lock()
       encoder?.requestKeyframe()
       lock.unlock()
     case .frame:
       break
+    }
+  }
+
+  /// Unlike a view change, a strip change is redrawn at once: the texts (speed,
+  /// clock) change while the screen under them may be still. Caller holds `lock`.
+  private func updateStrip(_ wanted: MirrorWire.Strip) {
+    guard wanted != strip else { return }
+    strip = wanted
+    guard let encoder, var picture = lastPicture else { return }
+    let rects = MirrorSender.layout(strip, width: encoder.config.width, height: encoder.config.height)
+    if rects.picture != lastPictureRect {
+      guard let moved = refit(picture, from: lastPictureRect, to: rects.picture, encoder: encoder) else { return }
+      picture = moved
+      lastPicture = moved
+      lastPictureRect = rects.picture
+    }
+    guard let composed = compose(picture, strip: strip, in: rects.strip, encoder: encoder) else { return }
+    lastScaled = composed
+    let now = CFAbsoluteTimeGetCurrent()
+    if now - lastEncodeAt >= minInterval {
+      lastEncodeAt = now
+      redrawPending = false
+      encoder.encode(composed)
+    } else {
+      redrawPending = true
     }
   }
 }
