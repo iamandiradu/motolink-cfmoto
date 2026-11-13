@@ -139,4 +139,78 @@ describe('RideRecorder', () => {
     r.start(T0 + 5000);
     expect(r.live()!.startedAt).toBe(T0);
   });
+
+  describe('auto-pause', () => {
+    const at = 45 + 10 * DLAT;
+    /** Parked: speed under 3 km/h, GPS wandering a few metres. */
+    const parked = (r: RideRecorder, from: number, seconds: number) => {
+      for (let i = 1; i <= seconds; i++) {
+        r.add({ timestamp: from + i * 1000, latitude: at + (i % 2) * 0.00004, longitude: 7 + (i % 3) * 0.00004, speedKmh: 1, accuracyM: 5 });
+      }
+    };
+
+    it('pauses after the threshold at a stop and resumes on moving off', () => {
+      const r = new RideRecorder();
+      r.start(T0);
+      northTrack(11).forEach((s) => r.add(s));
+      expect(r.live()!.paused).toBe(false);
+      parked(r, T0 + 10_000, 4);
+      // Stopped for 3 s: below the 5 s threshold.
+      expect(r.live()!.paused).toBe(false);
+      parked(r, T0 + 14_000, 60);
+      expect(r.live()!.paused).toBe(true);
+      expect(r.isPaused()).toBe(true);
+      const during = r.live()!;
+      parked(r, T0 + 74_000, 30);
+      // Paused: no time, no distance, no points.
+      expect(r.live()).toEqual(during);
+      northTrack(11, {}, T0 + 105_000, at).forEach((s) => r.add(s));
+      expect(r.live()!.paused).toBe(false);
+      const ride = r.stop(T0 + 115_000)!;
+      // 10 s before the stop, 10 s after, plus the 1 s from the last stopped fix to the first moving one.
+      expect(ride.summary.movingSeconds).toBe(21);
+      expect(ride.summary.totalSeconds).toBe(115);
+      // No points were stored between the moment of pausing and moving off.
+      const inPause = ride.points.filter((p) => p.t > T0 + 16_000 && p.t < T0 + 105_000);
+      expect(inPause).toHaveLength(0);
+    });
+
+    it('keeps the stop position on the track', () => {
+      const r = new RideRecorder({ minDistanceM: 1000 });
+      r.start(T0);
+      northTrack(11).forEach((s) => r.add(s));
+      parked(r, T0 + 10_000, 10);
+      const ride = r.stop(T0 + 20_000)!;
+      // Start, plus the last fix before the pause (thinned otherwise).
+      expect(ride.points.length).toBe(2);
+      expect(ride.points[1].t).toBeGreaterThanOrEqual(T0 + 10_000);
+    });
+
+    it('honours a custom threshold', () => {
+      const r = new RideRecorder({ autoPauseAfterS: 30 });
+      r.start(T0);
+      northTrack(11).forEach((s) => r.add(s));
+      parked(r, T0 + 10_000, 20);
+      expect(r.live()!.paused).toBe(false);
+      parked(r, T0 + 30_000, 15);
+      expect(r.live()!.paused).toBe(true);
+    });
+
+    it('never starts a ride on its own, even when the bike moves', () => {
+      const r = new RideRecorder();
+      northTrack(30).forEach((s) => r.add(s));
+      expect(r.isRecording()).toBe(false);
+      expect(r.isPaused()).toBe(false);
+    });
+
+    it('clears the pause on stop', () => {
+      const r = new RideRecorder();
+      r.start(T0);
+      northTrack(11).forEach((s) => r.add(s));
+      parked(r, T0 + 10_000, 20);
+      r.stop(T0 + 30_000);
+      r.start(T0 + 40_000);
+      expect(r.live()!.paused).toBe(false);
+    });
+  });
 });

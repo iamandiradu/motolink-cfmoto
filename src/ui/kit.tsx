@@ -1,5 +1,5 @@
 /** Shared pieces for the phone screens. */
-import { ReactNode, useState } from 'react';
+import { ReactNode, createContext, useContext, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export const colors = {
@@ -17,6 +17,13 @@ export const colors = {
   ok: '#3ddc84',
   warn: '#ffb020',
 };
+
+/**
+ * Glove mode: larger controls and text for use with riding gloves. Screens
+ * read it through this context; `touch` is the minimum control height and
+ * `bump` is added to control font sizes.
+ */
+export const GloveContext = createContext({ touch: 48, bump: 0 });
 
 export function Screen({ children }: { children: ReactNode }) {
   return (
@@ -108,6 +115,7 @@ export function Button(props: {
   disabled?: boolean;
 }) {
   const kind = props.kind ?? 'primary';
+  const glove = useContext(GloveContext);
   return (
     <Pressable
       accessibilityRole="button"
@@ -115,6 +123,7 @@ export function Button(props: {
       onPress={props.onPress}
       style={({ pressed }) => [
         styles.button,
+        { minHeight: glove.touch },
         kind === 'primary' && { backgroundColor: colors.accent },
         kind !== 'primary' && { borderWidth: 1, borderColor: kind === 'danger' ? colors.danger : colors.line },
         (pressed || props.disabled) && { opacity: 0.5 },
@@ -122,6 +131,7 @@ export function Button(props: {
       <Text
         style={[
           styles.buttonLabel,
+          { fontSize: 16 + glove.bump },
           { color: kind === 'primary' ? colors.onAccent : kind === 'danger' ? colors.danger : colors.text },
         ]}>
         {props.label}

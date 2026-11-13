@@ -7,8 +7,11 @@ import { AppState, Platform } from 'react-native';
 import { MotoLink, NativeButtonEvent } from '../../modules/moto-link';
 import { Gesture, GestureDetector } from '../buttons/gestures';
 import { DashAction, resolveAction } from '../buttons/mapping';
-import { DashPage, DashState, DashTheme, dashReducer, setTheme, showPage, tapItem } from '../dash/controller';
+import { DashPage, DashState, DashTheme, THEMES, dashReducer, setTheme, showPage, tapItem } from '../dash/controller';
 import { nativeTransport } from '../link/nativeTransport';
+import { AlertTracker, ComfortSettings, EMPTY_FUEL, pickStripAlert, refuel, themeForTime, trackTrip } from '../comfort';
+import { watchBattery } from '../comfort/battery';
+import { say } from '../comfort/speech';
 import { PhoneSensorSource } from '../metrics/phoneSensors';
 import { MirrorView, PresetId, toNativeView, updatePreset } from '../mirror/presets';
 import { NativeStrip, StripEdge, buildStrip, sameStrip } from '../mirror/strip';
@@ -113,6 +116,7 @@ export async function startMetrics(): Promise<void> {
         lastSampleAt = Date.now();
         setState({ metrics: trip.add(sample) });
         syncMirrorStrip();
+        runComfort();
         // Does nothing unless the rider pressed Record.
         feedSample(sample);
         syncLiveActivity();
@@ -158,6 +162,8 @@ export function changeMirrorPreset(id: PresetId, patch: Partial<MirrorView>): vo
 
 /** Opens the iOS sheet that starts or stops mirroring the phone screen. */
 export function toggleMirroring(): void {
+  // The rider is stopping it on purpose.
+  if (getState().mirroring) mirroringExpected = false;
   void MotoLink.showBroadcastPicker().catch((error) => appendLog(`mirroring: ${String(error)}`));
 }
 
@@ -262,12 +268,13 @@ async function connectAsync(): Promise<void> {
       },
       onLog: appendLog,
     },
-    { bitrate: settings.bitrateKbps * 1000, identity },
+    { bitrate: settings.bitrateKbps * 1000, identity, dashHost: settings.dashHostOverride.trim() || null },
   );
   session.start(bike);
 }
 
 export async function disconnect(): Promise<void> {
+  linkExpected = false;
   await session?.stop();
   session = null;
   previousLinkState = 'idle';
@@ -290,6 +297,7 @@ function syncMirrorStrip(): void {
     imperial: state.settings.units === 'imperial',
     now: new Date(),
     trackTitle: state.spotify.playback?.isPlaying ? state.spotify.playback.title : null,
+    alert: state.alert ? { short: state.alert.short, urgent: state.alert.severity === 'urgent' } : null,
   });
   if (sameStrip(lastStrip, strip)) return;
   lastStrip = strip;
@@ -300,6 +308,89 @@ function syncMirrorStrip(): void {
 export function setMirrorStrip(edge: StripEdge): void {
   saveSettings({ mirrorStrip: edge });
   syncMirrorStrip();
+}
+
+const alertTracker = new AlertTracker();
+let fuel = EMPTY_FUEL;
+/** The rider started these and has not stopped them; a drop is then worth a warning. */
+let linkExpected = false;
+let mirroringExpected = false;
+let lastThemeCheck = 0;
+
+/**
+ * Riding comfort: works out the warnings that apply now, speaks new ones, and
+ * follows daylight with the dash theme. Runs on every GPS reading and on link
+ * or mirroring changes.
+ */
+function runComfort(): void {
+  const state = getState();
+  const comfort = state.settings.comfort;
+
+  // Fuel: turn the trip meter into distance since the last refuel.
+  const tracked = trackTrip(fuel, state.metrics.tripKm);
+  if (tracked !== fuel) {
+    fuel = tracked;
+    if (Math.abs(fuel.kmSinceRefuel - comfort.kmSinceRefuel) >= 0.5) {
+      saveSettings({ comfort: { ...comfort, kmSinceRefuel: fuel.kmSinceRefuel } });
+    }
+  }
+
+  const linkUp = state.link.state === 'streaming' || state.link.state === 'negotiated';
+  if (linkUp) linkExpected = true;
+  const events = alertTracker.update({
+    metrics: state.metrics,
+    batteryLevel: state.battery.level,
+    charging: state.battery.charging,
+    linkConnected: linkUp,
+    linkExpected,
+    mirroring: state.mirroring,
+    mirroringExpected,
+    lastFixAt: lastSampleAt || null,
+    imperial: state.settings.units === 'imperial',
+    settings: { ...comfort, kmSinceRefuel: fuel.kmSinceRefuel },
+    now: Date.now(),
+  });
+  for (const event of events) {
+    if (event.speak && comfort.voice) say(event.alert.spoken);
+  }
+  const top = pickStripAlert(alertTracker.active);
+  if ((top?.id ?? null) !== (state.alert?.id ?? null) || top?.severity !== state.alert?.severity) {
+    setState({ alert: top });
+    syncMirrorStrip();
+  }
+
+  // Day or night colours, checked once a minute.
+  const now = Date.now();
+  if (comfort.autoTheme && now - lastThemeCheck > 60_000) {
+    lastThemeCheck = now;
+    const wanted = themeForTime({
+      now: new Date(now),
+      latitude: state.metrics.latitude,
+      longitude: state.metrics.longitude,
+      dayTheme: comfort.dayTheme,
+      nightTheme: comfort.nightTheme,
+      currentTheme: state.dash.theme,
+    });
+    if (wanted !== state.dash.theme && (THEMES as readonly string[]).includes(wanted)) {
+      setDashTheme(wanted as DashTheme);
+    }
+  }
+}
+
+export function changeComfort(patch: Partial<ComfortSettings>): void {
+  saveSettings({ comfort: { ...getState().settings.comfort, ...patch } });
+  lastThemeCheck = 0;
+  runComfort();
+}
+
+/** The rider filled up: the fuel reminder starts counting again. */
+export function markRefuelled(): void {
+  fuel = refuel(fuel);
+  changeComfort({ kmSinceRefuel: 0 });
+}
+
+export function testVoice(): void {
+  say('Voice announcements are on.', { enabled: true });
 }
 
 let activityShown = false;
@@ -373,6 +464,9 @@ export async function bootstrap(): Promise<void> {
   mirrorSubscription?.remove();
   mirrorSubscription = MotoLink.addListener('onMirrorState', (event) => {
     setState({ mirroring: event.active });
+    // Mirroring that stops without the rider asking is worth a warning.
+    if (event.active) mirroringExpected = true;
+    runComfort();
     syncLiveActivity();
     appendLog(event.active ? 'screen mirroring started' : 'screen mirroring stopped');
   });
@@ -391,6 +485,11 @@ export async function bootstrap(): Promise<void> {
   applyMirrorView();
   syncMirrorStrip();
   void bootstrapSpotify();
+  fuel = { ...EMPTY_FUEL, kmSinceRefuel: getState().settings.comfort.kmSinceRefuel };
+  watchBattery((battery) => {
+    setState({ battery });
+    runComfort();
+  });
   void startMetrics();
   void loadBikeKnowledge();
   const { bike, settings } = getState();

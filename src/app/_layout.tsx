@@ -8,8 +8,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { bootstrap, toggleMirroring } from '../app-state/controller';
 import { saveSettings, useAppState } from '../app-state/store';
 import { DashSurface } from '../dash/DashSurface';
+import { installCrashHandler } from '../diagnostics/crashLog';
 import { Onboarding } from '../onboarding/Onboarding';
-import { colors } from '../ui/kit';
+import { gloveScale } from '../comfort';
+import { GloveContext, colors } from '../ui/kit';
+
+// Before anything renders, so an error during start-up is kept for the report.
+installCrashHandler();
 
 function Shell() {
   const insets = useSafeAreaInsets();
@@ -20,6 +25,8 @@ function Shell() {
   const linkState = useAppState((s) => s.link.state);
   const mirroring = useAppState((s) => s.mirroring);
   const finishOnboarding = () => saveSettings({ onboardingDone: true });
+  const gloveMode = useAppState((s) => s.settings.comfort.gloveMode);
+  const glove = gloveScale(gloveMode, linkState === 'streaming' || linkState === 'negotiated');
   // The picture is captured from a live view, so the screen must stay on.
   useKeepAwake();
 
@@ -28,6 +35,7 @@ function Shell() {
   }, []);
 
   return (
+    <GloveContext.Provider value={{ touch: Math.max(48, glove.minTouch), bump: glove.fontBump }}>
     <View style={{ flex: 1, backgroundColor: colors.bg, paddingTop: insets.top }}>
       <StatusBar style="light" />
       {/* Always mounted: this is the picture the dash shows, and its preview. */}
@@ -58,6 +66,7 @@ function Shell() {
         </View>
       ) : null}
     </View>
+    </GloveContext.Provider>
   );
 }
 

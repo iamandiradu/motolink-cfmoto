@@ -341,11 +341,54 @@ const PAGE_COMPONENTS: Record<DashPage, (props: PageProps) => ReactNode> = {
   menu: MenuPage,
 };
 
+const BARS = ['#ffffff', '#ffff00', '#00ffff', '#00ff00', '#ff00ff', '#ff0000', '#0000ff', '#000000'];
+
+/**
+ * A picture that makes link faults visible: colour bars show the colours and
+ * the edges survive, and the counter and clock keep changing, so a frozen
+ * dash is told apart from a dash that shows nothing.
+ */
+function TestPattern() {
+  const [frame, setFrame] = useState(0);
+  const clock = useClock();
+  useEffect(() => {
+    const timer = setInterval(() => setFrame((n) => n + 1), 100);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <View style={styles.testScreen}>
+      <View style={styles.testBars}>
+        {BARS.map((colour) => (
+          <View key={colour} style={{ flex: 1, backgroundColor: colour }} />
+        ))}
+      </View>
+      <View style={styles.testInfo}>
+        <Text style={styles.testText}>TEST PICTURE</Text>
+        <Text style={styles.testCounter}>{String(frame).padStart(6, '0')}</Text>
+        <Text style={styles.testText}>{clock}</Text>
+      </View>
+      {/* A one-pixel white frame: if any edge is missing, the dash crops the picture. */}
+      <View pointerEvents="none" style={styles.testBorder} />
+    </View>
+  );
+}
+
 export function DashScreen() {
   const dash = useAppState((s) => s.dash);
+  const testPattern = useAppState((s) => s.testPattern);
   const metrics = useAppState((s) => s.metrics);
   const palette = PALETTES[dash.theme];
   const Page = PAGE_COMPONENTS[dash.page];
+  const alert = useAppState((s) => s.alert);
+  // Urgent warnings blink the frame once a second; the text itself stays put.
+  const [blink, setBlink] = useState(true);
+  const flashing = alert?.dashFlash === true;
+  useEffect(() => {
+    if (!flashing) return;
+    const timer = setInterval(() => setBlink((on) => !on), 500);
+    return () => clearInterval(timer);
+  }, [flashing]);
+  if (testPattern) return <TestPattern />;
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
@@ -366,12 +409,42 @@ export function DashScreen() {
       <View style={styles.body}>
         <Page metrics={metrics} dash={dash} palette={palette} />
       </View>
+      {alert ? (
+        <>
+          <View style={[styles.alertBar, { backgroundColor: alert.severity === 'urgent' ? palette.warn : palette.panel }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.alertText, { color: alert.severity === 'urgent' ? palette.bg : palette.warn }]}>
+              ! {alert.short}
+            </Text>
+          </View>
+          {flashing && blink ? (
+            <View pointerEvents="none" style={[styles.alertFrame, { borderColor: palette.warn }]} />
+          ) : null}
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 14 },
+  alertBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 56, alignItems: 'center', justifyContent: 'center' },
+  alertText: { fontSize: 34, fontWeight: '800', letterSpacing: 1 },
+  alertFrame: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderWidth: 10 },
+  testScreen: { flex: 1, backgroundColor: '#000' },
+  testBars: { flex: 1, flexDirection: 'row' },
+  testInfo: {
+    height: 110,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 30,
+    backgroundColor: '#000',
+  },
+  testText: { color: '#fff', fontSize: 36, fontWeight: '700' },
+  testCounter: { color: '#fff', fontSize: 72, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  testBorder: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderWidth: 1, borderColor: '#fff' },
   header: { flexDirection: 'row', gap: 24, height: 40, alignItems: 'center' },
   tab: {
     fontSize: 20,

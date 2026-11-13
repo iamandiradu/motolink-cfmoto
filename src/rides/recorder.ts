@@ -51,10 +51,17 @@ export interface LiveRide {
   movingSeconds: number;
   maxSpeedKmh: number;
   pointCount: number;
+  /**
+   * Auto-pause: the bike has been stopped (below 3 km/h) for longer than the
+   * auto-pause threshold. Riding time does not run and no track points are
+   * added until it moves again. The ride itself keeps going: only Stop ends it.
+   */
+  paused: boolean;
 }
 
-// Same thresholds as TripComputer (src/metrics/trip.ts).
-const MOVING_KMH = 3;
+/** Below this speed the bike counts as stopped (same as TripComputer, src/metrics/trip.ts). */
+export const MOVING_THRESHOLD_KMH = 3;
+const MOVING_KMH = MOVING_THRESHOLD_KMH;
 const MAX_ACCURACY_M = 50;
 const MAX_GAP_S = 10;
 
@@ -70,6 +77,8 @@ export interface ThinningOptions {
   headingChangeDeg: number;
   /** Hard cap on stored points; beyond it the track is decimated, not truncated. */
   maxPoints: number;
+  /** Stopped for this long (seconds) counts as paused. */
+  autoPauseAfterS: number;
 }
 
 export const DEFAULT_THINNING: ThinningOptions = {
@@ -79,6 +88,7 @@ export const DEFAULT_THINNING: ThinningOptions = {
   // ~60 bytes per point once stored: about 300 KB, well under Android's 2 MB
   // per-row limit in AsyncStorage.
   maxPoints: 5000,
+  autoPauseAfterS: 5,
 };
 
 /** Below this a "move" is GPS wander, even for the time or heading rules. */
@@ -125,6 +135,9 @@ export class RideRecorder {
   /** Latest accepted fix that thinning skipped; appended on stop so the track ends where the ride ended. */
   private pending: RidePoint | null = null;
   private lastKeptHeading: number | null = null;
+  /** Timestamp of the first stopped fix in the current stop; null while moving. */
+  private stoppedSince: number | null = null;
+  private paused = false;
 
   constructor(options: Partial<ThinningOptions> = {}) {
     this.opts = { ...DEFAULT_THINNING, ...options };
@@ -149,7 +162,14 @@ export class RideRecorder {
     this.lastFix = null;
     this.pending = null;
     this.lastKeptHeading = null;
+    this.stoppedSince = null;
+    this.paused = false;
     this.minDistanceM = this.opts.minDistanceM;
+  }
+
+  /** True while auto-paused at a stop. */
+  isPaused(): boolean {
+    return this.id !== null && this.paused;
   }
 
   /** Ends the ride and returns it. null when not recording. */
@@ -175,6 +195,8 @@ export class RideRecorder {
     this.id = null;
     this.points = [];
     this.pending = null;
+    this.paused = false;
+    this.stoppedSince = null;
     return ride;
   }
 
@@ -183,6 +205,8 @@ export class RideRecorder {
     this.id = null;
     this.points = [];
     this.pending = null;
+    this.paused = false;
+    this.stoppedSince = null;
   }
 
   live(): LiveRide | null {
@@ -193,6 +217,7 @@ export class RideRecorder {
       movingSeconds: this.movingSeconds,
       maxSpeedKmh: this.maxSpeedKmh,
       pointCount: this.points.length + (this.pending ? 1 : 0),
+      paused: this.paused,
     };
   }
 
@@ -227,9 +252,34 @@ export class RideRecorder {
 
     const point: RidePoint = { t: sample.timestamp, lat: sample.latitude, lon: sample.longitude };
     if (sample.altitudeM !== undefined && Number.isFinite(sample.altitudeM)) point.ele = sample.altitudeM;
+
+    // Auto-pause. Stopped time already never counts as riding time (above);
+    // past the threshold the ride is also marked paused and stops adding
+    // points, so a long coffee stop is not a cloud of GPS wander on the map.
+    let resumedFromPause = false;
+    if (moving) {
+      resumedFromPause = this.paused;
+      this.stoppedSince = null;
+      this.paused = false;
+    } else {
+      if (this.stoppedSince === null) this.stoppedSince = sample.timestamp;
+      if (!this.paused && sample.timestamp - this.stoppedSince >= this.opts.autoPauseAfterS * 1000) {
+        this.paused = true;
+        // Pin where the bike stopped, so the track ends at the stop and picks up from it.
+        if (this.pending) {
+          this.points.push(this.pending);
+          this.pending = null;
+          if (this.points.length > this.opts.maxPoints) this.decimate();
+        } else if (this.points.length === 0) {
+          this.points.push(point);
+        }
+      }
+      if (this.paused) return true;
+    }
+
     const heading = moving && sample.headingDeg !== undefined ? sample.headingDeg : null;
 
-    if (this.shouldKeep(point, heading, resumed)) {
+    if (this.shouldKeep(point, heading, resumed || resumedFromPause)) {
       this.points.push(point);
       this.pending = null;
       if (heading !== null) this.lastKeptHeading = heading;

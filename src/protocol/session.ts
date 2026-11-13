@@ -28,6 +28,7 @@ import {
   encodeControl,
 } from './frames';
 import { CaptureConfig, TouchEvent, handleMediaFrame } from './media';
+import { describeControl, describeMedia, record } from '../diagnostics/trace';
 import { BikeCredentials, fallbackDashAddress } from './qr';
 
 export type LinkState =
@@ -102,6 +103,11 @@ export interface SessionOptions {
   stallMs: number;
   /** Ask iOS to join the dash Wi-Fi when it is not already on it. */
   autoJoinWifi: boolean;
+  /**
+   * Address to probe instead of the Wi-Fi gateway. For testing against the
+   * dash simulator on a computer; null on a real bike.
+   */
+  dashHost: string | null;
 }
 
 export const DEFAULT_OPTIONS: SessionOptions = {
@@ -115,6 +121,7 @@ export const DEFAULT_OPTIONS: SessionOptions = {
   dialBackMs: 10_000,
   stallMs: 12_000,
   autoJoinWifi: true,
+  dashHost: null,
 };
 
 export interface SessionSnapshot {
@@ -221,6 +228,9 @@ export class LinkSession {
   }
 
   private update(patch: Partial<SessionSnapshot>): void {
+    if (patch.state && patch.state !== this.snapshot.state) {
+      record({ dir: 'note', port: null, kind: `state ${patch.state}` });
+    }
     this.snapshot = { ...this.snapshot, ...patch };
     this.listener.onChange?.(this.snapshot);
   }
@@ -272,7 +282,7 @@ export class LinkSession {
     this.update({ state: 'searching' });
 
     let net = await this.transport.getNetworkInfo();
-    if (!net.ip && this.options.autoJoinWifi) {
+    if (!net.ip && this.options.autoJoinWifi && !this.options.dashHost) {
       await this.transport.joinWifi(creds.ssid, creds.password).catch((error) => {
         this.log(`Wi-Fi join not available: ${String(error)}`);
       });
@@ -285,7 +295,8 @@ export class LinkSession {
       this.serversUp = true;
     }
 
-    const hosts = [net.gateway, fallbackDashAddress(creds)].filter(
+    const candidates = this.options.dashHost ? [this.options.dashHost] : [net.gateway, fallbackDashAddress(creds)];
+    const hosts = candidates.filter(
       (host, index, all): host is string => !!host && all.indexOf(host) === index,
     );
 
@@ -314,7 +325,7 @@ export class LinkSession {
     }
     if (!accepted) {
       // Wi-Fi has an address but no dash answered: the phone is probably on another network.
-      if (this.options.autoJoinWifi) {
+      if (this.options.autoJoinWifi && !this.options.dashHost) {
         await this.transport.joinWifi(creds.ssid, creds.password).catch(() => undefined);
       }
       return false;
@@ -396,6 +407,13 @@ export class LinkSession {
     try {
       if (connection.control) {
         for (const frame of connection.control.push(data)) {
+          record({
+            dir: 'in',
+            port: connection.port,
+            kind: describeControl(frame.cmd, frame.payload.length),
+            data: frame.payload,
+            bytes: 16 + frame.payload.length,
+          });
           if (frame.cmd !== Cmd.HEARTBEAT && frame.cmd !== Cmd.HEARTBEAT_ACK && frame.cmd !== Cmd.HU_TIME_SYNC) {
             this.log(`ctrl <- ${cmdName(frame.cmd)} (${frame.payload.length})`);
           }
@@ -403,6 +421,13 @@ export class LinkSession {
         }
       } else if (connection.media) {
         for (const frame of connection.media.push(data)) {
+          record({
+            dir: 'in',
+            port: connection.port,
+            kind: describeMedia(frame.cmdType, frame.body.length),
+            data: frame.body,
+            bytes: 8 + frame.body.length,
+          });
           for (const action of handleMediaFrame(frame)) {
             switch (action.type) {
               case 'send':

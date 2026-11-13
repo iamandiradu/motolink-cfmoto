@@ -13,6 +13,8 @@ export interface StripInput {
   now: Date;
   /** Song now playing, when Spotify is connected and playing. */
   trackTitle: string | null;
+  /** A warning to show in place of the song or trip distance. */
+  alert?: { short: string; urgent: boolean } | null;
 }
 
 export interface NativeStrip {
@@ -46,11 +48,12 @@ export function buildStrip(input: StripInput): NativeStrip {
     height: STRIP_HEIGHT,
     left: `${speed} ${unit}`,
     center: `${two(input.now.getHours())}:${two(input.now.getMinutes())}`,
-    // The song when there is one; otherwise the trip distance.
-    right: input.trackTitle ? `♪ ${input.trackTitle}` : trip,
+    // A warning first; then the song when there is one; otherwise the trip distance.
+    right: input.alert ? `! ${input.alert.short}` : input.trackTitle ? `♪ ${input.trackTitle}` : trip,
     background: 0x000000,
     text: 0xffffff,
-    accent: 0xff3d97,
+    // Blue normally; pink marks a warning, amber a milder one.
+    accent: input.alert ? (input.alert.urgent ? 0xff3d97 : 0xffb020) : 0x00aeef,
   };
 }
 
@@ -62,6 +65,7 @@ export function sameStrip(a: NativeStrip | null, b: NativeStrip): boolean {
     a.edge === b.edge &&
     a.left === b.left &&
     a.center === b.center &&
-    a.right === b.right
+    a.right === b.right &&
+    a.accent === b.accent
   );
 }

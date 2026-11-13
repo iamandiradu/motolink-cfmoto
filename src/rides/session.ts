@@ -7,6 +7,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 
 import type { MetricsSample } from '../metrics/trip';
 import { type LiveRide, RideRecorder, type RideSummary } from './recorder';
+import { addRideToService } from './serviceStore';
 import { shareRideGpx, type ShareResult } from './share';
 import * as storage from './storage';
 
@@ -70,6 +71,13 @@ export async function stopRecording(now: number = Date.now()): Promise<StopResul
   if (ride.points.length < 2) return { saved: false, reason: 'no-track' };
   const evicted = await storage.saveRide(ride);
   await refreshRides();
+  // Service reminders count the ride's distance. A failure here must not turn
+  // a saved ride into a "could not save" error, so it is swallowed.
+  try {
+    await addRideToService(ride.summary.id, ride.summary.distanceM);
+  } catch {
+    // The rider can still add the distance by hand.
+  }
   return { saved: true, ride: ride.summary, evicted: evicted.length };
 }
 

@@ -3,10 +3,19 @@ import { StyleSheet, Text, TextInput } from 'react-native';
 
 import { Share } from 'react-native';
 
-import { chooseBikeProfile, importBikeProfile, setBikeBluetooth, setDashTheme } from '../../app-state/controller';
+import {
+  changeComfort,
+  chooseBikeProfile,
+  importBikeProfile,
+  markRefuelled,
+  setBikeBluetooth,
+  setDashTheme,
+  testVoice,
+} from '../../app-state/controller';
 import { restoreHints, saveSettings, setState, useAppState } from '../../app-state/store';
 import { allProfiles, exportBikeReport } from '../../bikes';
 import { BikeCard } from '../../bikes/BikeCard';
+import { ComfortCard } from '../../comfort/ComfortCard';
 import { THEMES, THEME_LABELS } from '../../dash/controller';
 import { shareReport } from '../../diagnostics/share';
 import { REDIRECT_URI } from '../../spotify/api';
@@ -18,6 +27,7 @@ export default function SettingsScreen() {
   const theme = useAppState((s) => s.dash.theme);
   const logs = useAppState((s) => s.logs);
   const outputs = useAppState((s) => s.bluetoothOutputs);
+  const testPattern = useAppState((s) => s.testPattern);
   const spotify = useAppState((s) => s.spotify);
   const bike = useAppState((s) => s.bike);
   const bikeMatch = useAppState((s) => s.bikeMatch);
@@ -58,6 +68,15 @@ export default function SettingsScreen() {
           ]}
         />
       </Card>
+
+      <ComfortCard
+        settings={settings.comfort}
+        onChange={changeComfort}
+        imperial={settings.units === 'imperial'}
+        themes={THEMES.map((value) => ({ value, label: THEME_LABELS[value] }))}
+        onRefuel={markRefuelled}
+        onTestVoice={testVoice}
+      />
 
       <Card title="Spotify on the dash">
         {spotify.connected ? (
@@ -208,6 +227,38 @@ export default function SettingsScreen() {
           for. The Wi-Fi password, network name, and the dash and bike serial numbers are removed.
         </Body>
         <Button label="Share report" onPress={() => void shareReport().catch(() => undefined)} />
+      </Card>
+
+      <Card title="Testing" collapsible>
+        <Label>Test picture</Label>
+        <Body dim>
+          Sends colour bars and a running counter to the dash instead of the ride pages. If the counter stops, the
+          picture is frozen; if an edge of the white frame is missing, the dash is cropping it.
+        </Body>
+        <Choice
+          value={testPattern ? 'on' : 'off'}
+          onChange={(value) => setState({ testPattern: value === 'on' })}
+          options={[
+            { value: 'off', label: 'Ride pages' },
+            { value: 'on', label: 'Test picture' },
+          ]}
+        />
+        <Label>Dash simulator address</Label>
+        <Body dim>
+          For testing without the bike: the address of a computer running the dash simulator. Leave empty on a real
+          bike. Takes effect on the next Connect.
+        </Body>
+        <TextInput
+          value={settings.dashHostOverride}
+          onChangeText={(dashHostOverride) => saveSettings({ dashHostOverride })}
+          placeholder="Empty: use the bike"
+          placeholderTextColor={colors.dim}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="numbers-and-punctuation"
+          style={styles.input}
+          accessibilityLabel="Dash simulator address"
+        />
       </Card>
 
       <Card title="If the dash will not connect" collapsible>

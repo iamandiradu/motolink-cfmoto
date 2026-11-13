@@ -1,14 +1,20 @@
-/** Ride log: Record / Stop, the saved rides, GPX export. */
-import { useEffect, useState } from 'react';
+/**
+ * Ride log: Record / Stop, lifetime stats, service reminders, the saved rides
+ * and GPX export. Tapping a ride opens its detail (map, full summary) in place;
+ * Back returns to the list. No route of its own, so it mounts anywhere.
+ */
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { formatDuration } from '../metrics/trip';
 import { Body, Card, Row, Screen, colors } from '../ui/kit';
+import { formatDistance, formatSpeed } from './format';
 import { defaultRideName } from './gpx';
 import type { RideSummary } from './recorder';
+import { RideDetail } from './RideDetail';
+import { ServiceCard } from './ServiceCard';
 import { useRides } from './session';
-
-const KM_TO_MI = 0.621371;
+import { StatsCard } from './StatsCard';
 
 export interface RidesScreenProps {
   /** Show miles and mph. The screen does not read settings itself so it stays free of app-state. */
@@ -32,9 +38,11 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
   const now = useNow(recording !== null);
   const [stopping, setStopping] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const closeDetail = useCallback(() => setSelectedId(null), []);
 
-  const distance = (m: number) => `${((imperial ? KM_TO_MI : 1) * (m / 1000)).toFixed(1)} ${imperial ? 'mi' : 'km'}`;
-  const speed = (kmh: number) => `${Math.round(imperial ? kmh * KM_TO_MI : kmh)} ${imperial ? 'mph' : 'km/h'}`;
+  const distance = (m: number) => formatDistance(m, imperial);
+  const speed = (kmh: number) => formatSpeed(kmh, imperial);
 
   const onStop = async () => {
     setStopping(true);
@@ -70,26 +78,47 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          remove(ride.id).catch(() => Alert.alert('Could not delete', 'Try again.'));
+          remove(ride.id)
+            .then(() => setSelectedId((id) => (id === ride.id ? null : id)))
+            .catch(() => Alert.alert('Could not delete', 'Try again.'));
         },
       },
     ]);
   };
 
   const elapsed = recording ? (now - recording.startedAt) / 1000 : 0;
+  const selected = selectedId ? rides.find((r) => r.id === selectedId) : undefined;
+
+  if (selected) {
+    return (
+      <Screen>
+        <RideDetail
+          ride={selected}
+          imperial={imperial}
+          exporting={exporting === selected.id}
+          onBack={closeDetail}
+          onExport={() => void onExport(selected)}
+          onDelete={() => onDelete(selected)}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
-      <Card title={recording ? 'Recording' : 'New ride'}>
+      <Card title={recording ? (recording.paused ? 'Recording, paused' : 'Recording') : 'New ride'}>
         {recording ? (
-          <View style={styles.live} accessible accessibilityLabel={`Recording. ${distance(recording.distanceM)}, ${formatDuration(elapsed)}`}>
+          <View
+            style={styles.live}
+            accessible
+            accessibilityLabel={`Recording${recording.paused ? ', paused at a stop' : ''}. ${distance(recording.distanceM)}, riding time ${formatDuration(recording.movingSeconds)}, total ${formatDuration(elapsed)}`}>
             <View style={styles.liveItem}>
               <Text style={styles.liveValue}>{distance(recording.distanceM)}</Text>
               <Text style={styles.liveLabel}>Distance</Text>
             </View>
             <View style={styles.liveItem}>
-              <Text style={styles.liveValue}>{formatDuration(elapsed)}</Text>
-              <Text style={styles.liveLabel}>Time</Text>
+              <Text style={styles.liveValue}>{formatDuration(recording.movingSeconds)}</Text>
+              <Text style={styles.liveLabel}>Riding time</Text>
             </View>
           </View>
         ) : (
@@ -108,8 +137,18 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
           ]}>
           <Text style={styles.recordLabel}>{recording ? 'Stop' : 'Record'}</Text>
         </Pressable>
+        {recording ? <Body dim>Total time {formatDuration(elapsed)}.</Body> : null}
+        {recording?.paused ? (
+          <View style={styles.paused} accessibilityLiveRegion="polite">
+            <Text style={styles.pausedText}>Paused at a stop</Text>
+            <Body dim>Riding time resumes when you move off. Press Stop to end the ride.</Body>
+          </View>
+        ) : null}
         {recording ? <Body dim>Keep MotoLink running: the ride uses this phone&apos;s GPS.</Body> : null}
       </Card>
+
+      <StatsCard rides={rides} imperial={imperial} />
+      <ServiceCard imperial={imperial} />
 
       {loaded && rides.length === 0 ? (
         <Card title="Saved rides">
@@ -119,9 +158,17 @@ export function RidesScreen({ imperial = false }: RidesScreenProps) {
 
       {rides.map((ride) => (
         <Card key={ride.id} title={defaultRideName(ride.startedAt).replace(/^Ride /, '')}>
-          <Row label="Distance" value={distance(ride.distanceM)} />
-          <Row label="Riding time" value={formatDuration(ride.movingSeconds)} />
-          <Row label="Top speed" value={speed(ride.maxSpeedKmh)} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${defaultRideName(ride.startedAt)}: ${distance(ride.distanceM)}, riding time ${formatDuration(ride.movingSeconds)}`}
+            accessibilityHint="Shows the map and the full summary"
+            onPress={() => setSelectedId(ride.id)}
+            style={({ pressed }) => [styles.open, pressed && { opacity: 0.6 }]}>
+            <Row label="Distance" value={distance(ride.distanceM)} />
+            <Row label="Riding time" value={formatDuration(ride.movingSeconds)} />
+            <Row label="Top speed" value={speed(ride.maxSpeedKmh)} />
+            <Text style={styles.openLabel}>Map and details ›</Text>
+          </Pressable>
           <View style={styles.actions}>
             <Action
               label={exporting === ride.id ? 'Exporting…' : 'Export GPX'}
@@ -172,6 +219,10 @@ const styles = StyleSheet.create({
   liveItem: { flex: 1, alignItems: 'center' },
   liveValue: { color: colors.text, fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'] },
   liveLabel: { color: colors.dim, fontSize: 14 },
+  paused: { borderWidth: 1, borderColor: colors.warn, borderRadius: 12, padding: 12, gap: 4 },
+  pausedText: { color: colors.warn, fontSize: 17, fontWeight: '800' },
+  open: { minHeight: 44, gap: 2 },
+  openLabel: { color: colors.accent, fontSize: 15, fontWeight: '700', paddingVertical: 6 },
   record: { minHeight: 72, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   recordLabel: { color: colors.onAccent, fontSize: 22, fontWeight: '800' },
   actions: { flexDirection: 'row', gap: 10 },

@@ -14,6 +14,7 @@ import type { StripEdge } from '../mirror/strip';
 import type { BikeCredentials } from '../protocol/qr';
 import type { SessionSnapshot } from '../protocol/session';
 import type { Playback } from '../spotify/api';
+import { ComfortAlert, ComfortSettings, DEFAULT_COMFORT_SETTINGS, normalizeComfortSettings } from '../comfort';
 import type { BikeProfile, LearnedBike, ProfileMatch } from '../bikes';
 
 export interface Settings {
@@ -46,6 +47,10 @@ export interface Settings {
   /** First-run walkthrough: finished or skipped, and where the rider left off. */
   onboardingDone: boolean;
   onboardingStep: string | null;
+  /** Riding comfort: speed and fuel warnings, voice, automatic day/night, glove mode. */
+  comfort: ComfortSettings;
+  /** Testing only: probe this address instead of the bike (the dash simulator on a computer). Empty on a real bike. */
+  dashHostOverride: string;
   /** Ids of explanation cards the rider has closed. */
   dismissedHints: string[];
 }
@@ -67,6 +72,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mirrorStrip: 'bottom',
   onboardingDone: false,
   onboardingStep: null,
+  comfort: DEFAULT_COMFORT_SETTINGS,
+  dashHostOverride: '',
   dismissedHints: [],
 };
 
@@ -90,6 +97,11 @@ export interface AppState {
   bikeMatch: ProfileMatch | null;
   learnedBike: LearnedBike | null;
   customProfiles: BikeProfile[];
+  /** Dash shows a test picture with a running frame counter instead of the ride pages. */
+  testPattern: boolean;
+  /** The most important warning right now (speed, fuel, battery, lost link), if any. */
+  alert: ComfortAlert | null;
+  battery: { level: number | null; charging: boolean };
 }
 
 const IDLE_LINK: SessionSnapshot = {
@@ -117,6 +129,9 @@ let state: AppState = {
   bikeMatch: null,
   learnedBike: null,
   customProfiles: [],
+  testPattern: false,
+  alert: null,
+  battery: { level: null, charging: false },
 };
 
 const listeners = new Set<() => void>();
@@ -171,6 +186,7 @@ function mergeSettings(stored: unknown): Settings {
     mirrorPresets: normalisePresets(source.mirrorPresets, source.mirrorView),
     mirrorPreset: isPresetId(source.mirrorPreset) ? source.mirrorPreset : 'general',
     dismissedHints: Array.isArray(source.dismissedHints) ? source.dismissedHints : [],
+    comfort: normalizeComfortSettings(source.comfort),
     dashTheme: THEMES.includes(source.dashTheme as DashTheme) ? (source.dashTheme as DashTheme) : DEFAULT_SETTINGS.dashTheme,
   };
 }

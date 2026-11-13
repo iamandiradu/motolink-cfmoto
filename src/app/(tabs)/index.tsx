@@ -14,6 +14,9 @@ import { dismissHint, saveBike, useAppState } from '../../app-state/store';
 import { DEFAULT_MIRROR_VIEW, MirrorView, PresetApp, isDefaultView, presetApps } from '../../mirror/presets';
 
 const PRESET_APPS = presetApps(Platform.OS);
+import { MotoLink } from '../../../modules/moto-link';
+import { ChecklistCard } from '../../diagnostics/ChecklistCard';
+import { buildChecklist } from '../../diagnostics/checklist';
 import { WifiHelper } from '../../onboarding/WifiHelper';
 import { parsePairingQr } from '../../protocol/qr';
 import type { LinkState } from '../../protocol/session';
@@ -161,6 +164,7 @@ export default function LinkScreen() {
   const bike = useAppState((s) => s.bike);
   const link = useAppState((s) => s.link);
   const mirroring = useAppState((s) => s.mirroring);
+  const logs = useAppState((s) => s.logs);
   const showRideHint = useAppState((s) => !s.settings.dismissedHints.includes('before-ride'));
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
@@ -224,6 +228,25 @@ export default function LinkScreen() {
           <Button label="Connect" onPress={connect} />
         )}
       </Card>
+
+      {/* While connecting: where it has got to, and what to do if it is stuck. */}
+      {active && link.state !== 'streaming' ? (
+        <ChecklistCard
+          title="Connection steps"
+          checklist={(() => {
+            const network = MotoLink.getNetworkInfo();
+            return buildChecklist({
+              paired: true,
+              phoneIp: network.ip ?? null,
+              dashAddress: network.gateway ?? null,
+              snapshot: link,
+              mirroring,
+              logs,
+              now: Date.now(),
+            });
+          })()}
+        />
+      ) : null}
 
       {/* The phone is not on the dash network: show how to join it by hand. */}
       {link.state === 'searching' ? (
