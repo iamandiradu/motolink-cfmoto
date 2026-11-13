@@ -22,6 +22,23 @@ const STATE_TEXT: Record<LinkState, { title: string; hint: string; color: string
   streaming: { title: 'On the dash', hint: 'The dash is showing the picture above.', color: colors.ok },
 };
 
+function MirrorCard({ mirroring }: { mirroring: boolean }) {
+  return (
+    <Card title="Show Waze on the dash">
+      <View style={styles.statusRow}>
+        <View style={[styles.dot, { backgroundColor: mirroring ? colors.ok : colors.dim }]} />
+        <Text style={styles.statusTitle}>{mirroring ? 'Mirroring the phone screen' : 'Showing ride data'}</Text>
+      </View>
+      <Body dim>
+        {mirroring
+          ? 'The dash shows whatever is on this phone. Open Waze and turn the phone sideways so the map fills the dash. Keep the screen on.'
+          : 'Mirroring sends the whole phone screen to the dash, so any app works: Waze, Google Maps, Spotify. Tap below, choose MotoLink, then Start Broadcast.'}
+      </Body>
+      <Button label={mirroring ? 'Stop mirroring' : 'Start mirroring'} kind={mirroring ? 'plain' : 'primary'} onPress={toggleMirroring} />
+    </Card>
+  );
+}
+
 export default function LinkScreen() {
   const bike = useAppState((s) => s.bike);
   const link = useAppState((s) => s.link);
@@ -68,6 +85,7 @@ export default function LinkScreen() {
           {manualError ? <Text style={styles.error}>{manualError}</Text> : null}
           <Button label="Pair" kind="plain" onPress={pairFromText} disabled={manual.trim().length === 0} />
         </Card>
+        <MirrorCard mirroring={mirroring} />
       </Screen>
     );
   }
@@ -88,18 +106,7 @@ export default function LinkScreen() {
         )}
       </Card>
 
-      <Card title="Show Waze on the dash">
-        <View style={styles.statusRow}>
-          <View style={[styles.dot, { backgroundColor: mirroring ? colors.ok : colors.dim }]} />
-          <Text style={styles.statusTitle}>{mirroring ? 'Mirroring the phone screen' : 'Showing ride data'}</Text>
-        </View>
-        <Body dim>
-          {mirroring
-            ? 'The dash shows whatever is on this phone. Open Waze and turn the phone sideways so the map fills the dash. Keep the screen on.'
-            : 'Mirroring sends the whole phone screen to the dash, so any app works: Waze, Google Maps, Spotify. Tap below, choose MotoLink, then Start Broadcast.'}
-        </Body>
-        <Button label={mirroring ? 'Stop mirroring' : 'Start mirroring'} kind={mirroring ? 'plain' : 'primary'} onPress={toggleMirroring} />
-      </Card>
+      <MirrorCard mirroring={mirroring} />
 
       <Card title="Bike">
         <Row label="Wi-Fi" value={bike.ssid} />
