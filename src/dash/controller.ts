@@ -26,13 +26,14 @@ export const PAGE_ITEMS: Record<DashPage, readonly string[]> = {
 };
 
 /** Colour themes, after the CFMOTO liveries. */
-export const THEMES = ['aurora', 'gray', 'graphite', 'day'] as const;
+export const THEMES = ['aurora', 'gray', 'graphite', 'neon', 'day'] as const;
 export type DashTheme = (typeof THEMES)[number];
 
 export const THEME_LABELS: Record<DashTheme, string> = {
   aurora: 'Black, blue and pink',
   gray: 'Gray',
   graphite: 'Graphite',
+  neon: 'Neon green',
   day: 'Daylight',
 };
 

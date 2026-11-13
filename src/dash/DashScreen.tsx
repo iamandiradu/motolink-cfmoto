@@ -55,6 +55,16 @@ const PALETTES: Record<DashTheme, Palette> = {
     accent2: '#00aeef',
     warn: '#ff9f1c',
   },
+  // Black with neon green; lime for highlights.
+  neon: {
+    bg: '#000000',
+    panel: '#0e1611',
+    text: '#ffffff',
+    dim: '#9db3a4',
+    accent: '#39ff14',
+    accent2: '#d4ff3a',
+    warn: '#ffb020',
+  },
   day: {
     bg: '#f2f4f6',
     panel: '#ffffff',

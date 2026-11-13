@@ -210,11 +210,11 @@ describe('dash controller', () => {
     expect(tapItem(INITIAL_DASH_STATE, 7)).toBe(INITIAL_DASH_STATE);
   });
 
-  it('cycles the four colour themes and comes back', () => {
+  it('cycles the colour themes and comes back', () => {
     let state = INITIAL_DASH_STATE;
     const seen = [state.theme];
-    for (let i = 0; i < 4; i++) seen.push((state = dashReducer(state, 'toggleTheme')).theme);
-    expect(seen).toEqual(['aurora', 'gray', 'graphite', 'day', 'aurora']);
+    for (let i = 0; i < 5; i++) seen.push((state = dashReducer(state, 'toggleTheme')).theme);
+    expect(seen).toEqual(['aurora', 'gray', 'graphite', 'neon', 'day', 'aurora']);
   });
 
   it('turns music controls into numbered requests', () => {

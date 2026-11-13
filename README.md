@@ -45,7 +45,7 @@ It needs mobile data while riding, and the controls need Spotify Premium. YouTub
 
 ## Colours
 
-The dash picture has four themes after the CFMOTO liveries: black with blue and pink, gray, graphite, and a light one for daylight. Choose in Settings, or from the Menu page on the dash.
+The dash picture has five themes: black with blue and pink, gray, graphite, neon green, and a light one for daylight. Choose in Settings, or from the Menu page on the dash.
 
 ## Buttons
 
