@@ -6,6 +6,30 @@ This is not Apple CarPlay. The dash speaks Carbit EasyConn, not CarPlay, and iOS
 
 **Status: connects and mirrors on a CFMOTO 450 MT** (dash software 0.9.29.1, model id 37416), first tested on 2026-11-19. Handlebar buttons, the app's own dash pages and Android have not been checked on a bike yet.
 
+## Overview
+
+The pictures of the app and of the dash pages come from the iOS Simulator, not from a motorcycle.
+
+![MotoLink: your phone's screen and your ride data on the motorcycle dash, over the dash's own Wi-Fi](docs/slides/01-cover.png)
+
+![What it does: screen mirroring, the app's own dash pages, handlebar control](docs/slides/02-what.png)
+
+![How it connects: four steps over the dash's Wi-Fi, and why this is not CarPlay](docs/slides/03-connect.png)
+
+![Screen mirroring: what you get and the iOS limits](docs/slides/04-mirror.png)
+
+![Dash pages: Map, Music, Trip and Menu](docs/slides/05-pages.png)
+
+![Handlebar buttons: the default layout and the Buttons tab](docs/slides/06-buttons.png)
+
+![Ride data: the Metrics and Rides tabs](docs/slides/07-data.png)
+
+![Settings and comfort: themes, languages, glove mode and automatic start](docs/slides/08-comfort.png)
+
+![Where it stands on 19 November 2026: what is checked on the bike and what is not](docs/slides/09-status.png)
+
+![Phone and bike. No extra hardware.](docs/slides/10-close.png)
+
 ## Using it
 
 1. Close the official CFMOTO app. It uses the same ports, and the dash would talk to it instead.
