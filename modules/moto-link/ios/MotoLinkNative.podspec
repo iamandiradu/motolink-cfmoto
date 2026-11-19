@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary        = 'Native transport for the CFMOTO MotoPlay dash link'
   s.description    = 'TCP listeners, H.264 encoder, RSA identity, Wi-Fi join and handlebar button capture.'
   s.author         = 'iamandiradu'
-  s.homepage       = 'https://github.com/iamandiradu/cfmoto-carplay'
+  s.homepage       = 'https://github.com/iamandiradu/motolink-cfmoto'
   s.platforms      = { :ios => '16.4' }
   s.source         = { git: '' }
   s.static_framework = true
