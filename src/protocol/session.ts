@@ -101,6 +101,8 @@ export interface SessionOptions {
   dialBackMs: number;
   /** Streaming with no pulled frame for this long means the link is dead. */
   stallMs: number;
+  /** Control link open this long without the dash opening its video channel: drop it and probe again. */
+  handshakeStallMs: number;
   /** Ask iOS to join the dash Wi-Fi when it is not already on it. */
   autoJoinWifi: boolean;
   /**
@@ -120,6 +122,7 @@ export const DEFAULT_OPTIONS: SessionOptions = {
   probeTimeoutMs: 5000,
   dialBackMs: 10_000,
   stallMs: 12_000,
+  handshakeStallMs: 15_000,
   autoJoinWifi: true,
   dashHost: null,
 };
@@ -142,6 +145,8 @@ export interface SessionListener {
 interface Connection {
   id: string;
   port: number;
+  /** 1 for the first connection on this port in a session, 2 for the second. */
+  ordinal: number;
   control?: ControlParser;
   media?: MediaParser;
 }
@@ -177,6 +182,10 @@ export class LinkSession {
   private lastFramesSent = 0;
   private serversUp = false;
   private wake: (() => void) | null = null;
+  /** When the dash first dialled in, 0 while no control connection is open. */
+  private handshakeAt = 0;
+  /** Last command the dash sent on the control port, for the stall log line. */
+  private lastDashCmd = 'nothing';
 
   constructor(
     private readonly transport: LinkTransport,
@@ -302,6 +311,11 @@ export class LinkSession {
 
     this.update({ state: 'probing' });
     const probe = buildProbe(this.options.identity);
+    record({
+      dir: 'note',
+      port: null,
+      kind: `identity ${this.options.identity.phoneOs} flag ${this.options.identity.supportFunction}`,
+    });
     let accepted = false;
     for (let attempt = 1; attempt <= this.options.probeAttempts && !accepted; attempt++) {
       for (const host of hosts) {
@@ -371,8 +385,16 @@ export class LinkSession {
   }
 
   private onOpen(id: string, port: number): void {
-    const connection: Connection = { id, port };
-    if (port === PORT_CONTROL) connection.control = new ControlParser();
+    let ordinal = 1;
+    for (const c of this.connections.values()) if (c.port === port) ordinal++;
+    const connection: Connection = { id, port, ordinal };
+    if (port === PORT_CONTROL) {
+      connection.control = new ControlParser();
+      if (ordinal === 1) {
+        this.handshakeAt = Date.now();
+        this.lastDashCmd = 'nothing';
+      }
+    }
     else if (port === PORT_MEDIA_CONTROL) connection.media = new MediaParser();
     this.connections.set(id, connection);
     this.log(`dash connected :${port}`);
@@ -392,6 +414,7 @@ export class LinkSession {
     }
     if (!this.watchdog) {
       this.watchdog = setInterval(() => {
+        if (this.snapshot.state === 'handshaking') this.checkHandshakeStall();
         if (this.snapshot.state !== 'streaming') return;
         if (Date.now() - this.lastFrameAt < this.options.stallMs) return;
         this.log('video stalled, dropping link to force a reconnect');
@@ -399,6 +422,23 @@ export class LinkSession {
         for (const c of [...this.connections.values()]) this.transport.closeConnection(c.id);
       }, 5000);
     }
+  }
+
+  /**
+   * The dash dialled in but never opened its video channel. It will not
+   * recover on its own, so drop the link; the run loop probes again.
+   */
+  private checkHandshakeStall(): void {
+    if (!this.handshakeAt || Date.now() - this.handshakeAt < this.options.handshakeStallMs) return;
+    for (const c of this.connections.values()) if (c.port !== PORT_CONTROL) return;
+    const { phoneOs, supportFunction } = this.options.identity;
+    this.log(
+      `dash went silent after ${this.lastDashCmd} (phone type ${phoneOs}, flag ${supportFunction}), reconnecting`,
+    );
+    record({ dir: 'note', port: PORT_CONTROL, kind: `stall after ${this.lastDashCmd}` });
+    this.update({ lastError: `dash went silent after ${this.lastDashCmd}` });
+    this.handshakeAt = 0;
+    for (const c of [...this.connections.values()]) this.transport.closeConnection(c.id);
   }
 
   private onData(id: string, data: Uint8Array): void {
@@ -410,11 +450,12 @@ export class LinkSession {
           record({
             dir: 'in',
             port: connection.port,
-            kind: describeControl(frame.cmd, frame.payload.length),
+            kind: `#${connection.ordinal} ${describeControl(frame.cmd, frame.payload.length)}`,
             data: frame.payload,
             bytes: 16 + frame.payload.length,
           });
           if (frame.cmd !== Cmd.HEARTBEAT && frame.cmd !== Cmd.HEARTBEAT_ACK && frame.cmd !== Cmd.HU_TIME_SYNC) {
+            this.lastDashCmd = cmdName(frame.cmd);
             this.log(`ctrl <- ${cmdName(frame.cmd)} (${frame.payload.length})`);
           }
           for (const action of handleControlFrame(frame)) this.applyControl(id, action);

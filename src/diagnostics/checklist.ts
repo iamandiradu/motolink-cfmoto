@@ -61,6 +61,8 @@ export interface ChecklistInput {
   logs: readonly string[];
   /** Epoch ms. Used to ignore old connect-then-drop cycles. */
   now: number;
+  /** Phone type the app reports to the dash. Only "Android" is known to work. */
+  phoneType?: string;
 }
 
 const RANK: Record<LinkState, number> = {
@@ -118,7 +120,11 @@ function hintCallback(): StepHint {
 }
 
 /** Identity, serial and picture steps: wait, then try the other dash generation. */
-function hintWait(causes: string[]): StepHint {
+function hintWait(causes: string[], phoneType?: string): StepHint {
+  // A phone type other than Android is the first thing to undo: no dash is known to accept it.
+  if (phoneType && phoneType !== 'Android') {
+    return hint([t('checklist.hint.phoneTypeCause'), ...causes], [t('checklist.hint.phoneTypeAction'), t('checklist.hint.wait')]);
+  }
   return hint(causes, [t('checklist.hint.wait'), t('checklist.hint.tryGeneration')]);
 }
 
@@ -412,7 +418,7 @@ export function buildChecklist(input: ChecklistInput): Checklist {
     reached: identityReached ? 'done' : false,
     doneDetail: version ? t('checklist.detail.identityDone', { version }) : t('checklist.detail.identityNoVersion'),
     activeDetail: t('checklist.detail.identityActive'),
-    activeHint: hintWait([t('checklist.hint.identityCause')]),
+    activeHint: hintWait([t('checklist.hint.identityCause')], input.phoneType),
   });
 
   const pictureLabel = dropLoop
@@ -426,7 +432,7 @@ export function buildChecklist(input: ChecklistInput): Checklist {
     reached: serialPassed ? 'done' : pictureLabel ? 'skipped' : false,
     doneDetail: t('checklist.detail.serialDone'),
     activeDetail: t('checklist.detail.serialActive'),
-    activeHint: hintWait([t('checklist.hint.serialCause')]),
+    activeHint: hintWait([t('checklist.hint.serialCause')], input.phoneType),
   });
 
   drafts.push({
@@ -443,7 +449,7 @@ export function buildChecklist(input: ChecklistInput): Checklist {
           : t('checklist.detail.pictureDone', { size: pictureLabel ?? '', fps: capture.fps })
         : t('checklist.detail.pictureSize', { size: String(pictureLabel) }),
     activeDetail: t('checklist.detail.pictureActive'),
-    activeHint: hintWait([t('checklist.hint.pictureCause1'), t('checklist.hint.pictureCause2')]),
+    activeHint: hintWait([t('checklist.hint.pictureCause1'), t('checklist.hint.pictureCause2')], input.phoneType),
   });
 
   const pulling = snapshot.state === 'streaming' || snapshot.framesSent > 0 || facts.dataOpened;

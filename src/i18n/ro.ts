@@ -732,6 +732,8 @@ export const ro: Strings = {
       callbackAction3: 'Apoi atinge din nou Conectează.',
       wait: 'Așteaptă câteva secunde.',
       tryGeneration: 'Dacă rămâne aici, încearcă cealaltă Generație a bordului din Setări.',
+      phoneTypeCause: 'Tipul de telefon raportat bordului nu este Android. Nu se cunoaște niciun bord care să accepte alt tip.',
+      phoneTypeAction: 'În Setări, la „Dacă bordul nu se conectează”, pune tipul de telefon înapoi pe Android.',
       identityCause: 'Bordul a deschis legătura, dar nu și-a trimis încă datele.',
       serialCause: 'Unele borduri verifică telefonul înainte să stabilească imaginea.',
       pictureCause1: 'Bordul nu a deschis încă canalul pentru imagine.',

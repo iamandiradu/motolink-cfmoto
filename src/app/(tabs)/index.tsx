@@ -161,6 +161,7 @@ export default function LinkScreen() {
   const link = useAppState((s) => s.link);
   const mirroring = useAppState((s) => s.mirroring);
   const logs = useAppState((s) => s.logs);
+  const phoneType = useAppState((s) => s.settings.identityOs);
   const showRideHint = useAppState((s) => !s.settings.dismissedHints.includes('before-ride'));
   const [manual, setManual] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
@@ -241,6 +242,7 @@ export default function LinkScreen() {
               mirroring,
               logs,
               now: Date.now(),
+              phoneType,
             });
           })()}
         />

@@ -34,7 +34,15 @@ class SampleHandler: RPBroadcastSampleHandler {
       as? NSNumber,
       let tagged = CGImagePropertyOrientation(rawValue: raw.uint32Value)
     {
-      orientation = tagged
+      // ReplayKit's tag is the rotation to apply, which is the mirror of the
+      // EXIF meaning Core Image reads from the same value. Passed straight
+      // through, a sideways screen comes out upside down (seen on the 450 MT),
+      // so the two sideways cases are swapped. Upright and upside-down agree.
+      switch tagged {
+      case .left: orientation = .right
+      case .right: orientation = .left
+      default: orientation = tagged
+      }
     }
     sender.submit(pixelBuffer, orientation: orientation)
   }

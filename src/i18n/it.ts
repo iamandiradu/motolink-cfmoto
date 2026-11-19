@@ -732,6 +732,8 @@ export const it: Strings = {
       callbackAction3: 'Poi tocca di nuovo Collega.',
       wait: 'Aspetta qualche secondo.',
       tryGeneration: "Se resta qui, prova l'altra Generazione del cruscotto in Impostazioni.",
+      phoneTypeCause: 'Il tipo di telefono comunicato al cruscotto non è Android. Non si conosce alcun cruscotto che accetti un altro tipo.',
+      phoneTypeAction: 'In Impostazioni, sotto "Se il cruscotto non si collega", rimetti il tipo di telefono su Android.',
       identityCause: 'Il cruscotto ha aperto il collegamento ma non ha ancora inviato i suoi dati.',
       serialCause: "Alcuni cruscotti controllano il telefono prima di concordare un'immagine.",
       pictureCause1: "Il cruscotto non ha ancora aperto il canale dell'immagine.",

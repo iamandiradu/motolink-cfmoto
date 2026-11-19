@@ -153,6 +153,17 @@ describe('buildChecklist', () => {
     expect(list.steps.find((s) => s.id === 'identity')?.detail).toBe('Dash software 3.2.1.');
   });
 
+  it('a phone type other than Android is the first thing to undo when the handshake sticks', () => {
+    const stuck = input({
+      snapshot: snap({ state: 'handshaking', dash: DASH }),
+      logs: ['10:04:59 dash connected :10922', '10:04:59 ctrl <- CLIENT_INFO (420)', '10:04:59 ctrl <- CHECK_SN (69)'],
+    });
+    const ios = expectStuckAt(buildChecklist({ ...stuck, phoneType: 'iOS' }), 'picture', 'active');
+    expect(ios.hint?.actions[0]).toContain('back to Android');
+    const android = expectStuckAt(buildChecklist({ ...stuck, phoneType: 'Android' }), 'picture', 'active');
+    expect(android.hint?.actions.join(' ')).not.toContain('back to Android');
+  });
+
   it('negotiated without pulls points at the gauges screen', () => {
     const list = buildChecklist(
       input({

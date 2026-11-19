@@ -213,6 +213,38 @@ describe('LinkSession', () => {
     await session.stop();
   });
 
+  it('drops a control link the dash leaves silent, and probes again', async () => {
+    const { transport, session } = setup();
+    const logs: string[] = [];
+    (session as unknown as { listener: { onLog: (m: string) => void } }).listener.onLog = (m) => logs.push(m);
+    session.start(creds);
+    await flush();
+    transport.emit({ type: 'open', id: 'a', port: PORT_CONTROL });
+    transport.emit({ type: 'data', id: 'a', port: PORT_CONTROL, data: encodeControl(Cmd.CHECK_SN, { sn: 'X' }) });
+    await flush();
+    const probesBefore = transport.probes.length;
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(transport.closed).toEqual([]);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await flush();
+    expect(transport.closed).toEqual(['a']);
+    expect(logs.some((m) => m.startsWith('dash went silent after CHECK_SN (phone type Android, flag 0)'))).toBe(true);
+    expect(transport.probes.length).toBeGreaterThan(probesBefore);
+    await session.stop();
+  });
+
+  it('leaves a handshake alone once the dash has opened its video channel', async () => {
+    const { transport, session } = setup();
+    session.start(creds);
+    await flush();
+    transport.emit({ type: 'open', id: 'a', port: PORT_CONTROL });
+    transport.emit({ type: 'open', id: 'm', port: PORT_MEDIA_CONTROL });
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(transport.closed).toEqual([]);
+    await session.stop();
+  });
+
   it('closes the link when a control frame is corrupt', async () => {
     const { transport, session } = setup();
     session.start(creds);

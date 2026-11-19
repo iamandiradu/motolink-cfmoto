@@ -4,7 +4,7 @@ iPhone app for the CFMOTO 450 MT dash (MotoPlay). It streams a picture to the da
 
 This is not Apple CarPlay. The dash speaks Carbit EasyConn, not CarPlay, and iOS only projects CarPlay to Apple-certified receivers. See [docs/PLAN.md](docs/PLAN.md) for what was learned from the reference projects, the architecture and the open risks.
 
-**Status: written, not yet run against a motorcycle.** The protocol logic is unit tested and the native crypto and encoder were exercised on macOS. The first ride is the first real test.
+**Status: connects and mirrors on a CFMOTO 450 MT** (dash software 0.9.29.1, model id 37416), first tested on 2026-11-19. Handlebar buttons, the app's own dash pages and Android have not been checked on a bike yet.
 
 ## Using it
 

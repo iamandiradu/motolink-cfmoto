@@ -731,6 +731,8 @@ export const es: Strings = {
       callbackAction3: 'Después toca Conectar otra vez.',
       wait: 'Espera unos segundos.',
       tryGeneration: 'Si se queda aquí, prueba la otra Generación del cuadro en Ajustes.',
+      phoneTypeCause: 'El tipo de teléfono indicado al cuadro no es Android. No se conoce ningún cuadro que acepte otro tipo.',
+      phoneTypeAction: 'En Ajustes, en "Si el cuadro no se conecta", vuelve a poner el tipo de teléfono en Android.',
       identityCause: 'El cuadro abrió el enlace pero aún no ha enviado sus datos.',
       serialCause: 'Algunos cuadros comprueban el teléfono antes de acordar una imagen.',
       pictureCause1: 'El cuadro aún no ha abierto el canal de imagen.',

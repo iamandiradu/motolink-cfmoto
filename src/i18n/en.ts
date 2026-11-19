@@ -736,6 +736,8 @@ export const en = {
       callbackAction3: 'Then tap Connect again.',
       wait: 'Wait a few seconds.',
       tryGeneration: 'If it stays here, try the other Dash generation in Settings.',
+      phoneTypeCause: 'The phone type reported to the dash is not Android. No dash is known to accept another type.',
+      phoneTypeAction: 'In Settings, under "If the dash will not connect", set the phone type back to Android.',
       identityCause: 'The dash opened the link but has not sent its details yet.',
       serialCause: 'Some dashes check the phone before they agree a picture.',
       pictureCause1: 'The dash has not opened the picture channel yet.',

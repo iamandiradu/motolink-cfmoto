@@ -732,6 +732,8 @@ export const de: Strings = {
       callbackAction3: 'Tippe dann erneut auf Verbinden.',
       wait: 'Warte ein paar Sekunden.',
       tryGeneration: 'Bleibt es hier hängen, probier in den Einstellungen die andere Display-Generation.',
+      phoneTypeCause: 'Der dem Display gemeldete Telefontyp ist nicht Android. Kein Display ist bekannt, das einen anderen Typ annimmt.',
+      phoneTypeAction: 'Stell in den Einstellungen unter „Wenn das Display nicht verbindet“ den Telefontyp zurück auf Android.',
       identityCause: 'Das Display hat die Verbindung geöffnet, aber seine Daten noch nicht geschickt.',
       serialCause: 'Manche Displays prüfen das Handy, bevor sie ein Bild vereinbaren.',
       pictureCause1: 'Das Display hat den Bildkanal noch nicht geöffnet.',
